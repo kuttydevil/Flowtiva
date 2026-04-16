@@ -279,7 +279,13 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
 const AppContent = () => {
     const [user, setUser] = useState<User | null>(null);
-    const [view, setView] = useState<View>('loading');
+    const [view, setView] = useState<View>(() => {
+        const hash = window.location.hash;
+        const path = window.location.pathname;
+        if (hash.includes('type=recovery')) return 'update_password';
+        if (path === '/auth/confirm' || path === '/auth/callback') return 'loading';
+        return 'homepage';
+    });
   
     useEffect(() => {
         const unsubscribe = supabase.auth.onAuthStateChange((event: string, session: any) => {
