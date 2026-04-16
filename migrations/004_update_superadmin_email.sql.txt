@@ -1,0 +1,16 @@
+-- =================================================================
+-- MIGRATION SCRIPT: UPDATE SUPERADMIN EMAIL
+-- =================================================================
+-- This script updates the superadmin email address in the is_superadmin
+-- helper function to reflect the new administrative account.
+
+-- Replace the function with the updated email check.
+CREATE OR REPLACE FUNCTION public.is_superadmin(p_user_email TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN p_user_email = 'flowtiva@gmail.com';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Notify PostgREST to reload the schema cache.
+NOTIFY pgrst, 'reload schema';

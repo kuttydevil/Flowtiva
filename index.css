@@ -1,0 +1,191 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 
+      Premium 'Zinc' Palette & Teal Accent 
+      Designed for high contrast and modern aesthetics.
+    */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    
+    /* Refined Teal Primary */
+    --primary: 173 80% 40%;
+    --primary-foreground: 0 0% 98%;
+    
+    /* Secondary is a subtle gray */
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 173 80% 40%;
+    
+    --radius: 0.75rem;
+
+    /* WhatsApp Specific - Light */
+    --wa-bg: #EFE7DE; /* Slightly warmer/premium than standard */
+    --wa-message-out-bg: #E1FCD7; /* Cleaner green */
+    --wa-message-in-bg: #FFFFFF;
+    --wa-panel-header-bg: #F0F2F5;
+    --wa-text-secondary: #64748B;
+  }
+ 
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    
+    --primary: 173 70% 50%;
+    --primary-foreground: 240 5.9% 10%;
+    
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 173 70% 50%;
+
+    /* WhatsApp Specific - Dark */
+    --wa-bg: #0B141A;
+    --wa-message-out-bg: #005C4B;
+    --wa-message-in-bg: #202C33;
+    --wa-panel-header-bg: #202C33;
+    --wa-text-secondary: #8696A0;
+  }
+
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  [dir="rtl"] body {
+    font-family: 'Tajawal', sans-serif;
+  }
+}
+
+@layer components {
+    /* Message Bubble Tails */
+    .bubble-tail-out {
+        position: absolute;
+        top: 0;
+        right: -8px;
+        width: 0;
+        height: 0;
+        border-top: 0px solid transparent;
+        border-bottom: 12px solid transparent;
+        border-left: 12px solid var(--wa-message-out-bg);
+    }
+
+    .bubble-tail-in {
+        position: absolute;
+        top: 0;
+        left: -8px;
+        width: 0;
+        height: 0;
+        border-top: 0px solid transparent;
+        border-bottom: 12px solid transparent;
+        border-right: 12px solid var(--wa-message-in-bg);
+    }
+}
+
+@layer utilities {
+  /* Apple-style Glassmorphism */
+  .glass {
+    @apply bg-white/70 dark:bg-black/70 backdrop-blur-md border border-white/20 dark:border-white/10;
+  }
+
+  /* Refined Glows */
+  .btn-primary-glow {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.5);
+    transition: box-shadow 0.3s ease;
+  }
+  .btn-primary-glow:hover {
+    box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.6);
+  }
+
+  /* Smooth Entrance */
+  .animate-in {
+    animation: enter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    animation-fill-mode: forwards;
+  }
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  
+  /* Typing Indicator Bounce */
+  .animate-bounce-delay-1 { animation: bounce-dot 1.4s infinite ease-in-out both; animation-delay: -0.32s; }
+  .animate-bounce-delay-2 { animation: bounce-dot 1.4s infinite ease-in-out both; animation-delay: -0.16s; }
+  .animate-bounce-delay-3 { animation: bounce-dot 1.4s infinite ease-in-out both; }
+
+  @keyframes bounce-dot {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+  }
+
+  /* Intelligence Beam Flow */
+  @keyframes beam-flow {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+  }
+  .animate-beam {
+    background-size: 200% 200%;
+    animation: beam-flow 2s linear infinite;
+  }
+  
+  /* Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full transition-colors hover:bg-muted-foreground/50;
+  }
+}

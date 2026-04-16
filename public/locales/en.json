@@ -1,0 +1,1190 @@
+{
+  "_comment": "Nexus English Localization. Professional tone.",
+  "app": {
+    "errors": {
+      "loadHubData": "Unable to retrieve system data.",
+      "findInstance": "Instance not found for this contact.",
+      "generic": "System Error: {{error}}"
+    },
+    "notifications": {
+      "sentImage": "Media file sent"
+    },
+    "toasts": {
+      "toggleCommand": "Signal sent: {{status}} for +{{phoneNumber}}.",
+      "start": "activate",
+      "stop": "deactivate",
+      "settingsSaved": "Configuration updated successfully.",
+      "deleteSuccess": "Account +{{phoneNumber}} permanently deleted.",
+      "connectSuccess": "Connection established with +{{phoneNumber}}.",
+      "moveError": "Failed to update contact stage.",
+      "dueDateError": "Failed to set due date.",
+      "priorityError": "Failed to update priority."
+    }
+  },
+  "common": {
+    "active": "Online",
+    "view": "View",
+    "settings": "Config",
+    "delete": "Remove",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "close": "Close",
+    "loading": "Processing...",
+    "saving": "Saving...",
+    "connecting": "Connecting...",
+    "error": "Error",
+    "errorWithMessage": "System Error: {{message}}",
+    "notAvailable": "N/A",
+    "tryAgain": "Retry",
+    "downloading": "Downloading...",
+    "downloadPdf": "Export PDF",
+    "yesterday": "Yesterday",
+    "save": "Save Changes",
+    "back": "Back",
+    "theme": "Theme",
+    "language": "Language",
+    "admin": "Administrator"
+  },
+  "time": {
+    "justNow": "just now",
+    "secondsAgo": "{{count}}s ago",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago",
+    "monthsAgo": "{{count}}mo ago",
+    "yearsAgo": "{{count}}y ago",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "overdue": "Overdue by {{count}}d",
+    "inDays": "In {{count}} days"
+  },
+  "header": {
+    "toggleTheme": "Toggle theme",
+    "searchPlaceholder": "Search ecosystem...",
+    "openMenu": "Menu",
+    "searching": "Searching...",
+    "contacts": "Contacts",
+    "noResults": "No results for \"{{query}}\""
+  },
+  "seo": {
+    "home": {
+      "title": "Nexus — The Intelligence Engine.",
+      "description": "Unified conversational AI infrastructure. Automate WhatsApp, Instagram, and CRM workflows with enterprise-grade intelligence."
+    }
+  },
+  "homepage": {
+    "nav": {
+      "solution": "Platform",
+      "testimonials": "Customers",
+      "pricing": "Pricing",
+      "faq": "FAQ",
+      "signIn": "Log In",
+      "getStarted": "Get Started"
+    },
+    "hero": {
+      "title": "The Intelligence Engine",
+      "subtitle": "For Modern Business.",
+      "description": "Nexus unifies WhatsApp, Instagram, and CRM into a single, autonomous nervous system for your company.",
+      "trialCta": "Deploy Now",
+      "salesCta": "Contact Sales",
+      "emailPlaceholder": "work@company.com",
+      "formMicrocopy": "14-day trial. Enterprise security. No credit card.",
+      "videoCaption": "Watch the demo"
+    },
+    "demo": {
+        "chat": {
+            "u1": "Hi, I'm interested in the villa property.",
+            "a1": "Welcome. The 3-bedroom estate in Lusail is available. Are you looking for acquisition or lease?",
+            "u2": "Acquisition.",
+            "a2": "Noted. I've updated your dossier and moved you to the 'Qualified' pipeline.",
+            "u3": "Are there cash incentives?",
+            "a3": "Excellent question. I am flagging a senior agent to discuss financial specifics with you immediately.",
+            "agentActive": "Nexus Core Active",
+            "typeReply": "Intercept conversation..."
+        },
+        "workflow": {
+            "title": "Logic: New Lead Acquisition",
+            "trigger": "Trigger: Inbound Message",
+            "action1": "Action: Verify Intent",
+            "action2": "System: Tag 'Acquisition'",
+            "action3": "CRM: Update Stage",
+            "action4": "Alert: Sales Team",
+            "tooltip1": "Visualize logic with the Nexus Workflow Builder.",
+            "tooltip2": "Automated execution based on natural language intent.",
+            "tooltip3": "Zero-latency CRM updates.",
+            "tooltip4": "Seamless human-in-the-loop handoff."
+        }
+    },
+    "socialProof": {
+      "trustedBy": "POWERING NEXT-GEN ENTERPRISES",
+      "security": "SOC2 Compliant Architecture • End-to-End Encryption"
+    },
+    "solution": {
+      "title": "Infrastructure for Growth",
+      "description": "Deploy autonomous agents that act as an extension of your workforce. Scalable, secure, and intelligent.",
+      "step1": {
+        "title": "Connect Channels",
+        "description": "Link WhatsApp & Instagram Business APIs in seconds via secure OAuth."
+      },
+      "step2": {
+        "title": "Configure Logic",
+        "description": "Define behavioral parameters and knowledge bases using natural language."
+      },
+      "step3": {
+        "title": "Deploy & Scale",
+        "description": "Launch agents that handle inquiry volume across all channels at infinite scale."
+      }
+    },
+    "testimonials": {
+      "title": "Built for Scale",
+      "description": "How high-growth companies utilize Nexus to outperform the market.",
+      "t1": {
+        "quote": "Nexus didn't just automate our chats; it restructured our entire lead qualification process. Efficiency is up 300%.",
+        "name": "Ahmed K.",
+        "title": "Director, QR Properties",
+        "metric": "300%",
+        "metricLabel": "Efficiency Gain"
+      },
+      "t2": {
+        "quote": "The unified dashboard allows us to manage distributed dealership teams effortlessly. The AI scheduling is flawless.",
+        "name": "Fatima S.",
+        "title": "VP Marketing, Doha Motors",
+        "metric": "45%",
+        "metricLabel": "Conv. Rate Lift"
+      },
+      "t3": {
+        "quote": "We recover lost leads after hours automatically. Nexus operates while we sleep, capturing every opportunity.",
+        "name": "Yusuf A.",
+        "title": "Founder, Pearl Hospitality",
+        "metric": "24/7",
+        "metricLabel": "Uptime"
+      }
+    },
+    "pricing": {
+      "lossAversionTitle": "Capture Every Opportunity",
+      "lossAversionDescription": "Latency kills deals. Nexus ensures zero response time, 24/7/365.",
+      "urgencyBanner": "Priority Access: Secure 20% off annual commitments.",
+      "mostPopular": "Preferred",
+      "month": "mo",
+      "year": "yr",
+      "savePercent": "Save {percent}%",
+      "ctaStarter": "Start Building",
+      "ctaPro": "Start Pro Trial",
+      "ctaBusiness": "Contact Sales",
+      "socialProofTicker": [
+        "New deployment in Lusail Real Estate sector.",
+        "Enterprise retail account activated.",
+        "Automotive group reduced response time by 90%.",
+        "15 new active agents deployed this hour."
+      ],
+      "plans": {
+          "starter": {
+              "description": "Essential infrastructure for solo operators.",
+              "subheader": "Core Features",
+              "f1": "1 WhatsApp Node",
+              "f2": "2,000 AI Ops/mo",
+              "f3": "Basic Lead Capture",
+              "f4": "Live Console",
+              "f5": "Standard Support"
+          },
+          "pro": {
+              "description": "Advanced toolkit for scaling teams.",
+              "subheader": "Growth Stack",
+              "f1": "5 WhatsApp Nodes",
+              "f2": "10,000 AI Ops/mo",
+              "f3": "Advanced Qualification Logic",
+              "f4": "Human Handoff Protocol",
+              "f5": "Personality Calibration",
+              "f6": "Priority Support"
+          },
+          "business": {
+              "description": "Full-scale solution for high-volume enterprises.",
+              "subheader": "Enterprise Grade",
+              "f1": "15+ WhatsApp Nodes",
+              "f2": "30,000+ AI Ops/mo",
+              "f3": "Custom Workflow Logic",
+              "f4": "API Access",
+              "f5": "Dedicated Success Manager",
+              "f6": "SLA Guarantees"
+          }
+      }
+    },
+    "faq": {
+      "title": "System Specifications",
+      "learnMore": "Documentation",
+      "q1": "Data Sovereignty & Security",
+      "a1": "Nexus employs rigorous encryption standards. Data is isolated via Row Level Security (RLS) policies within our Supabase infrastructure, ensuring strict tenant separation and compliance.",
+      "q2": "Multi-Lingual Capabilities",
+      "a2": "Powered by Gemini Pro, Nexus agents possess native-level fluency in Arabic and English, capable of code-switching and dialect recognition in real-time.",
+      "q3": "Deployment Velocity",
+      "a3": "Rapid deployment. Connect existing numbers and configure agent logic in under 300 seconds via our intuitive control plane.",
+      "q4": "Exception Handling",
+      "a4": "Nexus implements graceful degradation. When confidence thresholds are not met, the system executes a smooth handover protocol to human operators, ensuring zero dead-ends."
+    },
+    "cta": {
+      "title": "Deploy Intelligence Today",
+      "description": "Transform your communication infrastructure. Join the future of business automation.",
+      "button": "Initialize Nexus"
+    }
+  },
+  "auth": {
+    "createTitle": "Initialize Account",
+    "welcomeTitle": "Access Terminal",
+    "emailLabel": "Email",
+    "emailPlaceholder": "name@company.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "••••••••",
+    "signInButton": "Access",
+    "signingInButton": "Authenticating...",
+    "signUpButton": "Register",
+    "signingUpButton": "Registering...",
+    "promptSignUp": "New to Nexus?",
+    "promptSignIn": "Existing User?",
+    "verifyEmailToast": "Verification signal sent. Check email.",
+    "signInSuccessToast": "Authentication successful.",
+    "passwordStrength": {
+      "tooShort": "Short",
+      "weak": "Weak",
+      "medium": "Medium",
+      "strong": "Strong",
+      "veryStrong": "Secure"
+    },
+    "errors": {
+      "weakPassword": "Security Alert: Password complexity insufficient."
+    }
+  },
+  "dashboard": {
+    "header": {
+      "hub": "Command Center",
+      "pipeline": "Pipeline",
+      "contacts": "Directory",
+      "instagram": "Instagram",
+      "billing": "Subscription",
+      "workflows": "Logic Flows",
+      "outreach": "Campaigns",
+      "ai_metrics": "Intelligence Metrics",
+      "administrator": "Admin",
+      "signedInAs": "User",
+      "signOut": "Terminate Session",
+      "signOutSuccess": "Session terminated."
+    },
+    "sidebar": {
+      "hub": "Command",
+      "pipeline": "Pipeline",
+      "contacts": "Directory",
+      "instagram": "Instagram",
+      "outreach": "Outreach",
+      "workflows": "Logic",
+      "billing": "Billing",
+      "ai_metrics": "Metrics"
+    }
+  },
+  "hub": {
+    "instanceManagement": {
+      "title": "Nodes",
+      "description": "Active communication endpoints."
+    },
+    "buttons": {
+      "connectNew": "Add Node",
+      "connectFirst": "Initialize First Node"
+    },
+    "emptyState": {
+      "noAccounts": "No active nodes detected."
+    },
+    "actionItems": {
+      "title": "System Alerts",
+      "newLeads": "New Acquisitions",
+      "newLeadsDesc": "Pending pipeline review.",
+      "failedInstances": "Node Failures",
+      "failedInstancesDesc": "Requires immediate intervention."
+    },
+    "instanceCard": {
+      "status": {
+        "pending": "Pending",
+        "linking": "Handshake",
+        "running": "Operational",
+        "inactive": "Standby",
+        "failed": "System Fault"
+      },
+      "tooltips": {
+        "pending": "Initializing worker process...",
+        "linking": "Handshake protocol active. Waiting for device link.",
+        "running": "Operational. Processing data streams.",
+        "inactive": "Standby mode. Signal processing paused.",
+        "failed": "System Fault. Check diagnostics.",
+        "healthy": "Optimal",
+        "unresponsive": "Latency High"
+      },
+      "buttons": {
+        "viewChats": "Console",
+        "continueLinking": "Resume Link",
+        "viewErrorLogs": "Diagnostics"
+      },
+      "health": {
+        "runningOn": "Host: {hostname} (PID: {pid})"
+      },
+      "menu": {
+        "settings": "Configure",
+        "viewLogs": "Terminal",
+        "delete": "Decommission"
+      }
+    },
+    "healthCard": {
+      "title": "AI System Health",
+      "statusLabel": "Status:",
+      "lastChecked": "Last checked",
+      "uptime": "Uptime",
+      "refresh": "Refresh",
+      "states": {
+        "normal": "Normal",
+        "degraded": "Degraded",
+        "error": "Critical",
+        "unknown": "Unknown"
+      }
+    },
+    "insights": {
+      "title": "AI Assistant",
+      "default": "Welcome to your dashboard!"
+    },
+    "upcomingTasks": {
+      "title": "Upcoming Tasks",
+      "empty": "No upcoming or overdue tasks."
+    },
+    "pipelineDistribution": {
+        "title": "Pipeline Distribution"
+    },
+    "recentActivity": {
+        "title": "Recent Activity",
+        "empty": "No recent incoming messages."
+    }
+  },
+  "whatsapp": {
+    "title": "Active Nodes",
+    "description": "Select a node to inspect traffic.",
+    "connectNew": "New Node",
+    "notifications": {
+      "title": "System Notifications",
+      "description": "Enable desktop alerts for real-time monitoring.",
+      "button": "Enable",
+      "successToast": "Notifications active.",
+      "infoToast": "Permission denied."
+    },
+    "loading": "Loading nodes...",
+    "noAccounts": "No nodes online.",
+    "selectInstance": "Select Node",
+    "selectInstanceDesc": "Inspect node traffic and history.",
+    "deleteSuccess": "Node +{{phoneNumber}} decommissioned.",
+    "connectModal": {
+      "step1": {
+        "title": "Initialize Node",
+        "description": "Define operational parameters.",
+        "businessTitle": "Commercial Entity",
+        "businessDesc": "Sales, Support, CRM integration.",
+        "personalTitle": "Personal Assistant",
+        "personalDesc": "Individual productivity and management."
+      },
+      "step2": {
+        "businessTitle": "Commercial Node Setup",
+        "personalTitle": "Personal Node Setup",
+        "description": "Configure endpoint and intelligence parameters.",
+        "phoneLabel": "1. Endpoint ID (Phone)",
+        "phonePlaceholder": "e.g., 55123456",
+        "aiLabel": "2. Intelligence Configuration",
+        "generating": "Computing...",
+        "generateCode": "Generate Key"
+      },
+      "step3": {
+        "linkTitle": "Device Handshake",
+        "linkDesc": "Secure tunnel opening for +974{{phoneNumber}}.",
+        "codeLabel": "Input Authentication Code:",
+        "instructions": "WhatsApp > Settings > Linked Devices > Link Device > Link via Phone Number.",
+        "successTitle": "Node Operational",
+        "successDesc": "Endpoint +974{{phoneNumber}} is online.",
+        "loadingStatus": {
+            "init": "Booting worker process...",
+            "connect": "Establishing socket connection...",
+            "request": "Requesting auth token...",
+            "wait": "Awaiting server response...",
+            "prepare": "Finalizing secure handshake..."
+        }
+      },
+      "buttons": {
+        "cancel": "Abort",
+        "back": "Back",
+        "close": "Close",
+        "done": "Finish",
+        "viewChats": "Open Console"
+      }
+    },
+    "relinkingModal": {
+      "title": "Handshake In Progress",
+      "description": "Complete authentication for +{{phoneNumber}}.",
+      "fetchingStatus": "Polling status...",
+      "expiredTitle": "Token Expired",
+      "expiredDesc": "Security timeout. Token invalid.",
+      "expiresIn": "TTL: {{time}}",
+      "deleteAttempt": "Abort"
+    },
+    "deleteModal": {
+      "title": "Decommission Node",
+      "description": "Confirm deletion of node +{{phoneNumber}}. All telemetry and logs will be purged. Irreversible.",
+      "confirm": "Decommission"
+    },
+    "settingsModal": {
+      "title": "Node Configuration: +{{phoneNumber}}",
+      "description": "Adjust AI behavioral parameters.",
+      "promptLabel": "System Instruction (Prompt)",
+      "promptDesc": "Core logic governing agent behavior.",
+      "save": "Commit Changes",
+      "saving": "Committing...",
+      "successToast": "Configuration updated.",
+      "errorToast": "Update failed.",
+      "context": {
+        "label": "Knowledge Base",
+        "help": "Static context for inference engine.",
+        "placeholder": "Operational hours, policy data, etc."
+      },
+      "tools": {
+        "title": "Capabilities",
+        "help": "Authorized actions.",
+        "update_crm_stage": {
+          "label": "Pipeline Management",
+          "description": "Move entities across stages."
+        },
+        "add_tag": {
+          "label": "Tagging",
+          "description": "Apply classification tags."
+        },
+        "set_due_date": {
+          "label": "Scheduling",
+          "description": "Set temporal triggers."
+        },
+        "update_priority": {
+          "label": "Prioritization",
+          "description": "Adjust entity priority."
+        }
+      },
+      "errors": {
+        "schemaUpdate": "Schema mismatch. Migration required.",
+        "saveFailed": "Save failed."
+      }
+    },
+    "contactList": {
+      "title": "Data Stream",
+      "forNumber": "Endpoint: +974{{phoneNumber}}",
+      "search": "Filter stream...",
+      "filterByTag": "Filter: Tag",
+      "filterByPriority": "Filter: Priority",
+      "noTags": "No tags defined.",
+      "clearFilters": "Reset",
+      "noConversations": "Stream empty.",
+      "noContactsFound": "No matching entities.",
+      "allPriorities": "All Levels"
+    },
+    "messagePane": {
+      "beginning": "Start of retention",
+      "loadingMore": "Fetching archives...",
+      "loadMoreError": "Archive retrieval failed.",
+      "writeMessage": "Input command...",
+      "attachFile": "Upload Asset",
+      "sendMessage": "Transmit",
+      "fileTooLarge": "Asset exceeds {{size}}MB limit.",
+      "invalidFileType": "Unsupported file format.",
+      "online": "online"
+    },
+    "tagEditor": {
+      "noTags": "Untagged",
+      "edit": "Modify Tags",
+      "cancel": "Cancel",
+      "addPlaceholder": "New tag...",
+      "save": "Commit",
+      "successToast": "Tags committed.",
+      "errorToast": "Tag update failed: {{error}}"
+    },
+    "promptGenerator": {
+      "description": "Define parameters to generate system prompt for {{useCase}} agent.",
+      "placeholder": "Input data...",
+      "generateButton": "Generate Logic",
+      "generating": "Computing...",
+      "instructionsLabel": "Directives (Optional)",
+      "instructionsPlaceholder": "e.g., Strict formal tone",
+      "instructionsHelp": "Fine-tune behavior parameters.",
+      "business": {
+        "nameLabel": "Entity Name",
+        "namePlaceholder": "e.g., Nexus Corp",
+        "typeLabel": "Sector",
+        "typePlaceholder": "e.g., Real Estate",
+        "servicesLabel": "Offerings / Specs",
+        "servicesPlaceholder": "Detailed product/service list...",
+        "servicesHelp": "Detailed schema improves inference."
+      },
+      "personal": {
+        "nameLabel": "Designation",
+        "namePlaceholder": "e.g., Assistant",
+        "personalityLabel": "Persona",
+        "personalityPlaceholder": "e.g., Efficient, terse",
+        "knowledgeLabel": "Database",
+        "knowledgePlaceholder": "Domain specific knowledge..."
+      }
+    },
+    "tagSuggestions": {
+      "title": "AI Classification",
+      "save": "Accept {{count}} Tag(s)",
+      "dismiss": "Ignore"
+    },
+    "contactDetails": {
+        "title": "Contact Details",
+        "about": "About",
+        "tags": "Tags",
+        "crm": "CRM Details",
+        "stage": "Stage",
+        "priority": "Priority",
+        "dueDate": "Due Date",
+        "clearDate": "Clear"
+    },
+    "selectInstance": "Select a Node",
+    "selectInstanceDesc": "Choose an active node to view traffic."
+  },
+  "crm": {
+    "stages": {
+      "new": "New",
+      "contacted": "Contacted",
+      "proposal": "Proposal",
+      "won": "Closed Won",
+      "lost": "Closed Lost"
+    },
+    "title": "Pipeline",
+    "description": "Manage entity lifecycle.",
+    "noActiveAccount": "Offline",
+    "noActiveAccountDesc": "Connect a node to view pipeline data.",
+    "search": "Query pipeline...",
+    "sortByActivity": "Sort: Activity",
+    "sortByName": "Sort: Alpha",
+    "stats": {
+      "total": "Total Entities",
+      "conversion": "Conv. Rate",
+      "responseTime": "Latency",
+      "newThisWeek": "New (7d)"
+    },
+    "chartTitle": "Distribution",
+    "kanbanCard": {
+      "menu": {
+        "moveTo": "Transition to...",
+        "setPriority": "Set Priority",
+        "setDueDate": "Set Deadline"
+      },
+      "datePicker": {
+        "title": "Target Date",
+        "clear": "Clear"
+      },
+      "noMessages": "No data.",
+      "noDueDate": "No target",
+      "clearDateModal": {
+        "title": "Clear Deadline",
+        "description": "Remove the target date for this entity?",
+        "confirm": "Confirm"
+      }
+    },
+    "kanbanColumn": {
+      "dragHelp": "Drag entities to update state."
+    },
+    "pipelineChart": {
+      "title": "Volume",
+      "noData": "No data.",
+      "tooltip": {
+        "contacts": "Entities"
+      }
+    }
+  },
+  "billing": {
+    "manageTitle": "Subscription Management",
+    "currentPlan": "Active Plan",
+    "cancelSubscription": "Cancel",
+    "renewOn": "Renews: {{date}}.",
+    "paymentMethod": "Payment Method",
+    "expires": "Exp: {{date}}",
+    "updatePayment": "Update",
+    "invoiceHistory": "Invoices",
+    "invoiceHistoryDesc": "Transaction logs.",
+    "invoiceDate": "Date",
+    "invoiceAmount": "Total",
+    "invoiceStatus": "State",
+    "invoiceAction": "Action",
+    "download": "Export",
+    "changePlanTitle": "Upgrade Infrastructure",
+    "changePlanDesc": "Select a capacity tier for your requirements.",
+    "monthly": "Monthly",
+    "yearly": "Annual",
+    "saveYearly": "2 Months Free",
+    "currentPlanButton": "Active",
+    "choosePlanButton": "Select",
+    "faqTitle": "Subscription FAQ",
+    "errors": {
+      "loadFailed": "Data retrieval failed.",
+      "invoiceNotFound": "Invoice data missing."
+    },
+    "inactive": {
+      "title": "Subscription Inactive",
+      "description": "Service suspended. Please update payment method."
+    },
+    "noSubscription": {
+      "title": "No Active Subscription",
+      "description": "Select a tier to initialize service."
+    },
+    "trial": {
+      "title": "Trial Active: {{planName}}",
+      "description": "Expires on {{date}}. Upgrade to retain access."
+    },
+    "usage": {
+      "title": "Capacity Utilization",
+      "description": "Cycle usage. Resets {{date}}.",
+      "messages": "AI Ops",
+      "accounts": "Nodes",
+      "contacts": "Entities",
+      "messagesUnit": "ops",
+      "accountsUnit": "nodes",
+      "limitExceeded": "Capacity Exceeded",
+      "approachingLimit": "Capacity Low"
+    },
+    "toasts": {
+      "planChanged": "Migrated to {{planName}} tier."
+    },
+    "modals": {
+      "confirmChange": {
+        "title": "Confirm Migration",
+        "description": "Switch to {{planName}} ({{cycle}})? Billing adjusts immediately.",
+        "confirming": "Processing..."
+      }
+    },
+    "invoiceModal": {
+      "title": "Invoice",
+      "date": "Date:",
+      "billTo": "Bill To",
+      "status": "Status",
+      "table": {
+        "description": "Item",
+        "quantity": "Qty",
+        "unitPrice": "Price",
+        "amount": "Total"
+      },
+      "summary": {
+        "subtotal": "Subtotal",
+        "tax": "Tax (0%)",
+        "total": "Total"
+      },
+      "footer": {
+        "thankYou": "Nexus Inc.",
+        "contact": "support@nexus.ai"
+      },
+      "errors": {
+        "pdfLibrary": "Export module failed.",
+        "pdfElement": "DOM element missing.",
+        "pdfGeneration": "Generation error."
+      }
+    },
+    "paymentModal": {
+      "title": "Update Payment Method",
+      "description": "Securely update billing details via Google Pay.",
+      "loading": "Initializing secure frame...",
+      "notAvailable": "Payment method unavailable.",
+      "toasts": {
+        "success": "Method updated."
+      },
+      "errors": {
+        "init": "Initialization failed.",
+        "loadSheet": "UI load error.",
+        "readinessCheck": "Availability check failed."
+      }
+    },
+    "plans": {
+      "mostPopular": "Enterprise Standard",
+      "starter": {
+        "description": "For individuals & solo entrepreneurs testing the waters.",
+        "subheader": "The essentials to get started with AI chat.",
+        "f1": "Connect 1 WhatsApp Account",
+        "f2": "2,000 AI Messages/month",
+        "f3": "Capture Leads with AI",
+        "f4": "Live Chat Dashboard",
+        "f5": "Standard Email Support"
+      },
+      "pro": {
+        "description": "For growing businesses ready to automate & scale.",
+        "subheader": "Powerful automation and multi-agent support.",
+        "f1": "Connect up to 5 WhatsApp Accounts",
+        "f2": "10,000 AI Messages/month",
+        "f3": "Automate Lead Qualification",
+        "f4": "Seamless AI-to-Human Handoff",
+        "f5": "Customize your AI's Personality",
+        "f6": "Priority Email & Chat Support"
+      },
+      "business": {
+        "description": "For established teams & agencies managing multiple clients.",
+        "subheader": "Scale operations with advanced tools & support.",
+        "f1": "Connect up to 15 WhatsApp Accounts",
+        "f2": "30,000 AI Messages / month",
+        "f3": "All Pro Features, Unlocked",
+        "f4": "Advanced Workflow Automations",
+        "f5": "Dedicated Account Manager",
+        "f6": "API Access (Coming Soon)"
+      }
+    },
+    "faq": {
+      "q1": "Can I scale my plan?",
+      "a1": "Yes. Capacity can be adjusted instantly from this dashboard.",
+      "q2": "Definition of AI Op?",
+      "a2": "Any automated inference or response generated by the Nexus core.",
+      "q3": "Trial terms?",
+      "a3": "14-day full access to Pro features. No commitment.",
+      "q4": "Overage policy?",
+      "a4": "Service pauses upon reaching capacity limits. Upgrade for uninterrupted service."
+    },
+    "paymentSuccess": "Payment confirmed! Invoice #{{id}}",
+    "subscriptionUpdated": "Subscription updated successfully!",
+    "paymentFailed": "Payment failed or was cancelled.",
+    "verifying": "Verifying payment...",
+    "noPaymentMethod": "No payment method on file."
+  },
+  "workflows": {
+    "title": "Logic Flows",
+    "description": "Visual automation builder.",
+    "create": "New Logic Flow",
+    "noWorkflows": "No Logic Defined",
+    "noWorkflowsDesc": "Initialize a new automation sequence.",
+    "deleteTitle": "Purge Logic",
+    "deleteDesc": "Delete \"{{name}}\"? Irreversible.",
+    "deleteConfirm": "Purge",
+    "successDelete": "Logic \"{{name}}\" purged.",
+    "errorDelete": "Purge failed: {{error}}",
+    "infoStatus": "Logic \"{{name}}\": {{status}}.",
+    "errorStatus": "Status update failed: {{error}}",
+    "edit": "Configure",
+    "trigger": "Input",
+    "viewHistory": "Logs",
+    "historyTitle": "Execution Logs",
+    "historyDescription": "Audit trail for automation events.",
+    "run": "Exec",
+    "triggeredAt": "Timestamp",
+    "noHistory": "Log Empty",
+    "noHistoryDesc": "No execution events recorded.",
+    "runDetails": "Telemetry",
+    "actionLog": "Trace",
+    "searchPlaceholder": "Search workflows...",
+    "mindmap": {
+      "title": "Generative Logic Builder",
+      "description": "Describe desired behavior.",
+      "placeholder": "e.g., On new inbound from unknown, classify intent and route...",
+      "generate": "Compute Logic",
+      "generating": "Computing...",
+      "trigger": "Input",
+      "action": "Output",
+      "save": "Commit",
+      "cancel": "Abort",
+      "error": "Syntax error. Refine query."
+    },
+    "filters": {
+      "allTriggers": "All Inputs",
+      "all": "All",
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "table": {
+      "selectAll": "Select All"
+    },
+    "batchActions": {
+      "selected": "{{count}} selected",
+      "activate": "Enable",
+      "deactivate": "Disable"
+    },
+    "toasts": {
+      "batchDelete": "{{count}} purged.",
+      "batchStatus": "{{count}} updated.",
+      "batchError": "Batch error: {{error}}",
+      "updateSuccess": "Logic updated.",
+      "createSuccess": "Logic created."
+    },
+    "deleteModal": {
+      "title": "Batch Purge",
+      "description": "Delete selected items? Irreversible."
+    },
+    "builder": {
+      "errors": {
+        "oneTrigger": "Single input allowed per flow."
+      },
+      "defaultName": "Untitled Logic",
+      "namePlaceholder": "Logic Name",
+      "save": "Commit",
+      "toasts": {
+        "updateSuccess": "Logic updated.",
+        "createSuccess": "Logic created."
+      },
+      "newWorkflowTitle": "New Logic Flow",
+      "untitled": "Untitled Workflow",
+      "saving": "Saving...",
+      "cancel": "Cancel",
+      "new": "New Workflow",
+      "triggers": "Triggers",
+      "actions": "Actions",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "fitView": "Fit View"
+    },
+    "generator": {
+      "title": "Generative Build",
+      "description": "AI-assisted logic construction.",
+      "placeholder": "Describe logic...",
+      "generate": "Generate",
+      "buildManually": "Manual Mode"
+    },
+    "nodes": {
+      "common": {
+        "configure": "Config Required"
+      },
+      "newContact": {
+        "title": "New Entity",
+        "details": "First contact event."
+      },
+      "stageChanged": {
+        "title": "Stage Change",
+        "details": "To: {{stage}}",
+        "detailsEmpty": "Select stage."
+      },
+      "tagAdded": {
+        "title": "Tag Added",
+        "details": "Tag: {{tag}}",
+        "detailsEmpty": "Select tag."
+      },
+      "trigger": {
+        "title": "Input",
+        "details": "Config"
+      },
+      "sendMessage": {
+        "title": "Transmit",
+        "details": "\"{{message}}...\"",
+        "detailsEmpty": "Set payload."
+      },
+      "addTag": {
+        "title": "Add Tag",
+        "details": "Tag: {{tag}}",
+        "detailsEmpty": "Set tag."
+      },
+      "changeStage": {
+        "title": "Set Stage",
+        "details": "To: {{stage}}",
+        "detailsEmpty": "Set stage."
+      },
+      "wait": {
+        "title": "Delay",
+        "details": "{{days}}d"
+      },
+      "action": {
+        "title": "Op",
+        "details": "Config"
+      }
+    },
+    "settings": {
+      "noOptions": "No parameters.",
+      "delete": "Remove Node",
+      "stageLabel": "Stage",
+      "selectStage": "Select",
+      "tagLabel": "Tag",
+      "tagPlaceholder": "e.g., priority",
+      "messageLabel": "Payload",
+      "messagePlaceholder": "Content...",
+      "tagToAddLabel": "Tag",
+      "tagToAddPlaceholder": "e.g., processed",
+      "newStageLabel": "Target Stage",
+      "waitDaysLabel": "Duration (Days)",
+      "label": "Label",
+      "stage": "Stage",
+      "tag": "Tag",
+      "message": "Message",
+      "newStage": "New Stage",
+      "days": "Days to Wait"
+    },
+    "panel": {
+      "triggers": "Inputs",
+      "actions": "Outputs",
+      "nodes": {
+        "newContact": "New Entity",
+        "stageChanged": "State Change",
+        "tagAdded": "Tag Event",
+        "keywordMatch": "Pattern Match",
+        "sendMessage": "Transmit",
+        "addTag": "Tag",
+        "changeStage": "State Set",
+        "wait": "Delay"
+      }
+    }
+  },
+  "outreach": {
+    "title": "Campaigns",
+    "description": "Mass communication management.",
+    "newCampaign": "New Campaign",
+    "noCampaignsTitle": "Empty",
+    "noCampaignsDesc": "Initialize first campaign.",
+    "noActiveInstanceWarning": "Active node required.",
+    "progress": "Status",
+    "sent": "delivered",
+    "template": "Template",
+    "pause": "Halt",
+    "run": "Execute",
+    "deleteConfirmation": "Delete \"{{name}}\"? Irreversible.",
+    "createModal": {
+      "step1Title": "Config (1/2)",
+      "step1Desc": "Parameters & Templates.",
+      "campaignName": "Designator",
+      "campaignNamePlaceholder": "e.g., Q3 Activation",
+      "sendingAccount": "Source Node",
+      "selectAccount": "Select node",
+      "messageTemplate": "Template Syntax",
+      "messageTemplatePlaceholder": "Hello {{contact_name}}...",
+      "templateDesc": "Use `{{var}}` for interpolation.",
+      "next": "Proceed",
+      "cancel": "Abort",
+      "step2Title": "Data Ingestion (2/2)",
+      "step2Desc": "CSV Injection.",
+      "contactsList": "Dataset",
+      "requiredFormat": "Format:",
+      "validContacts": "{{count}} records valid.",
+      "example": "Ex:",
+      "back": "Back",
+      "createButton": "Initialize ({{count}} records)",
+      "successToast": "Campaign \"{{name}}\" initialized.",
+      "startNowToast": "Campaign active.",
+      "startErrorToast": "Start failed: {{error}}"
+    },
+    "deleteModal": {
+      "title": "Delete Campaign",
+      "description": "Confirm deletion of \"{{name}}\"."
+    },
+    "toasts": {
+      "statusToggle": "Campaign \"{{name}}\": {{status}}.",
+      "statusError": "Update failed: {{error}}",
+      "deleteSuccess": "Campaign deleted.",
+      "deleteError": "Deletion failed: {{error}}"
+    },
+    "createdModal": {
+      "title": "Campaign Ready",
+      "description": "\"{{campaignName}}\" is staged.",
+      "body": "Execute now or schedule for later.",
+      "done": "Close",
+      "startNow": "Execute",
+      "starting": "Executing..."
+    }
+  },
+  "chatbot": {
+    "greeting": "Nexus Assistant online. Querying knowledge base...",
+    "title": "Nexus Core",
+    "status": "Online",
+    "placeholder": "Input query...",
+    "error": "System fault.",
+    "connectionError": "Connection interrupted.",
+    "open": "Open Terminal",
+    "close": "Close Terminal"
+  },
+  "footer": {
+    "copyright": "© {{year}} Nexus Inc. Intelligence, Connected.",
+    "privacy": "Privacy Protocol",
+    "terms": "Service Agreement"
+  },
+  "legal": {
+    "lastUpdatedLabel": "Version",
+    "lastUpdated": "{{date}}",
+    "close": "Close",
+    "privacy": {
+      "title": "Data Privacy Protocol",
+      "l1": "1. Overview",
+      "p1": "Nexus Inc. adheres to strict data governance standards...",
+      "l2": "2. Data Ingestion",
+      "p2": "We process:",
+      "li2_1": "Identity Data",
+      "li2_2": "Telemetry",
+      "li2_3": "Communication Logs",
+      "li2_4": "Usage Metrics",
+      "l3": "3. Utilization",
+      "p3": "Data is utilized for:",
+      "li3_1": "Service Delivery",
+      "li3_2": "Optimization",
+      "li3_3": "Analytics",
+      "li3_4": "Support",
+      "li3_5": "Billing",
+      "li3_6": "Compliance",
+      "l4": "4. Security",
+      "p4": "Enterprise-grade encryption and isolation.",
+      "l5": "5. Contact",
+      "p5": "legal@nexus.ai"
+    },
+    "terms": {
+      "title": "Service Agreement",
+      "l1": "1. Terms",
+      "p1": "Utilization of Nexus implies agreement...",
+      "l2": "2. Service Definition",
+      "p2": "Nexus provides AI infrastructure...",
+      "l3": "3. User Obligations",
+      "p3": "Users must:",
+      "li3_1": "Possess rights to endpoints.",
+      "li3_2": "Monitor automated outputs.",
+      "li3_3": "Comply with platform policies.",
+      "li3_4": "Prevent misuse.",
+      "l4": "4. Limitations",
+      "p4": "Service subject to upstream provider availability.",
+      "l5": "5. Termination",
+      "p5": "Nexus reserves right to terminate access.",
+      "l6": "6. Jurisdiction",
+      "p6": "Qatar Law.",
+      "l7": "7. Contact",
+      "p7": "legal@nexus.ai"
+    }
+  },
+  "modals": {
+    "buttons": {
+      "cancel": "Abort",
+      "confirm": "Confirm"
+    },
+    "deleteInstance": {
+      "title": "Decommission Node",
+      "description": "Confirm deletion. Data loss permanent.",
+      "confirm": "Execute"
+    },
+    "addLead": {
+      "title": "Manual Entry",
+      "description": "Create new entity record.",
+      "contactName": "Name",
+      "contactNamePlaceholder": "Name",
+      "assignToInstance": "Node",
+      "selectAccount": "Select",
+      "phoneOptional": "Endpoint (Opt)",
+      "phonePlaceholder": "Phone",
+      "tagsOptional": "Tags",
+      "tagsPlaceholder": "comma, separated",
+      "tagsHelp": "Classification tags.",
+      "save": "Create",
+      "errors": {
+        "nameRequired": "Name required.",
+        "instanceRequired": "Node required."
+      },
+      "toasts": {
+        "success": "Record created."
+      }
+    },
+    "instanceSettings": {
+      "title": "Config: +974{{phoneNumber}}",
+      "description": "Agent parameter configuration.",
+      "context": {
+        "label": "Knowledge Base",
+        "help": "Static context for inference engine.",
+        "placeholder": "Operational hours, policy data, etc."
+      },
+      "prompt": {
+        "label": "System Instruction",
+        "generate": "Auto-Generate",
+        "help": "Core behavioral logic."
+      },
+      "tools": {
+        "title": "Capabilities",
+        "help": "Authorized actions.",
+        "update_crm_stage": {
+          "label": "Pipeline Management",
+          "description": "Move entities across stages."
+        },
+        "add_tag": {
+          "label": "Tagging",
+          "description": "Apply classification tags."
+        },
+        "set_due_date": {
+          "label": "Scheduling",
+          "description": "Set temporal triggers."
+        },
+        "update_priority": {
+          "label": "Prioritization",
+          "description": "Adjust entity priority."
+        }
+      },
+      "errors": {
+        "schemaUpdate": "Schema mismatch. Migration required.",
+        "saveFailed": "Save failed."
+      }
+    }
+  },
+  "instagram": {
+    "addModal": {
+      "title": "Connect Instagram",
+      "description": "Authenticate endpoint.",
+      "usernameLabel": "1. Handle",
+      "usernamePlaceholder": "@handle",
+      "passwordLabel": "2. Secret",
+      "passwordHelp": "Encrypted storage.",
+      "aiDetailsLabel": "3. Intelligence Config",
+      "connect": "Connect",
+      "errors": {
+        "allFieldsRequired": "All fields required."
+      },
+      "toasts": {
+        "success": "@{{username}} connected."
+      }
+    },
+    "contactList": {
+      "title": "Direct Messages",
+      "forUsername": "@{{username}}",
+      "searchPlaceholder": "Search...",
+      "noConversations": "Empty.",
+      "noResults": "No results."
+    },
+    "conversation": {
+      "toasts": {
+        "sending": "Transmitting..."
+      },
+      "emptyState": {
+        "title": "Select Conversation",
+        "description": "View message stream."
+      }
+    },
+    "dashboard": {
+      "title": "Instagram Nodes",
+      "description": "Manage IG endpoints.",
+      "connectNew": "Add Node",
+      "noAccounts": "No IG nodes.",
+      "toasts": {
+        "deleteSuccess": "Node deleted."
+      }
+    },
+    "deleteModal": {
+      "title": "Decommission IG Node",
+      "description": "Confirm deletion of @{{username}}."
+    },
+    "messagePane": {
+      "placeholder": "Reply...",
+      "dmLabel": "Direct Message",
+      "loadingMore": "Loading..."
+    },
+    "toasts": {
+        "deleteSuccess": "Instagram account removed."
+    }
+  },
+  "superadmin": {
+    "title": "God Mode",
+    "adminLabel": "Superadmin",
+    "navLabel": "Root Nav",
+    "tabs": {
+      "overview": "Overview",
+      "users": "Users",
+      "instances": "Nodes",
+      "health": "Health"
+    }
+  },
+  "contacts": {
+      "searchPlaceholder": "Search by name, phone, or tag...",
+      "sortByActivity": "Sort by Last Activity",
+      "sortByName": "Sort by Name",
+      "noResults": "No contacts found.",
+      "table": {
+          "contact": "Contact",
+          "phone": "Phone Number",
+          "tags": "Tags",
+          "stage": "Stage",
+          "priority": "Priority",
+          "dueDate": "Due Date",
+          "lastActivity": "Last Activity"
+      }
+  }
+}

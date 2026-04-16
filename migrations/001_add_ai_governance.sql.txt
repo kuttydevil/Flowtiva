@@ -1,0 +1,236 @@
+-- =================================================================
+-- MIGRATION SCRIPT: ADD AI GOVERNANCE & HARDENING
+-- =================================================================
+-- This script adds the full AI Governance Tier and implements critical
+-- hardening fixes as requested. It is designed to be run once on
+-- an existing database.
+
+-- =========== GOVERNANCE & TELEMETRY TABLES ===========
+
+-- 1. ai_telemetry: Raw telemetry data for analysis.
+CREATE TABLE IF NOT EXISTS public.ai_telemetry (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  tenant_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  action_key TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('success', 'error', 'cached')),
+  latency_ms INT,
+  error_message TEXT,
+  payload JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_ai_telemetry_created_at ON public.ai_telemetry(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_telemetry_action_key ON public.ai_telemetry(action_key);
+ALTER TABLE public.ai_telemetry ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON public.ai_telemetry;
+CREATE POLICY "Enable insert for authenticated users" ON public.ai_telemetry FOR INSERT TO authenticated WITH CHECK (tenant_id = auth.uid());
+DROP POLICY IF EXISTS "Enable read for owner" ON public.ai_telemetry;
+CREATE POLICY "Enable read for owner" ON public.ai_telemetry FOR SELECT USING (tenant_id = auth.uid());
+
+
+-- 2. ai_usage: Atomic daily counters for cost control.
+CREATE TABLE IF NOT EXISTS public.ai_usage (
+  id BIGSERIAL PRIMARY KEY,
+  day DATE NOT NULL,
+  tenant_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  calls INT DEFAULT 0,
+  UNIQUE(day, tenant_id)
+);
+ALTER TABLE public.ai_usage ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable all for owner" ON public.ai_usage;
+CREATE POLICY "Enable all for owner" ON public.ai_usage FOR ALL USING (tenant_id = auth.uid());
+
+
+-- 3. ai_alerts: Stores critical system alerts detected by the frontend or backend.
+CREATE TABLE IF NOT EXISTS public.ai_alerts (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  alert_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  metadata JSONB,
+  tenant_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+);
+ALTER TABLE public.ai_alerts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read for owner" ON public.ai_alerts;
+DROP POLICY IF EXISTS "Enable all for owner" ON public.ai_alerts;
+CREATE POLICY "Enable all for owner" ON public.ai_alerts
+  FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+
+
+-- 4. ai_reports: Stores automated weekly/monthly performance reports.
+CREATE TABLE IF NOT EXISTS public.ai_reports (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  period TEXT NOT NULL CHECK (period IN ('weekly', 'monthly')),
+  content TEXT NOT NULL,
+  metadata JSONB
+);
+ALTER TABLE public.ai_reports ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read for owner" ON public.ai_reports;
+CREATE POLICY "Enable read for owner" ON public.ai_reports FOR SELECT USING (tenant_id = auth.uid());
+
+
+-- 5. ai_tool_calls: Audit trail for all AI function calls.
+CREATE TABLE IF NOT EXISTS public.ai_tool_calls (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  tenant_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  instance_id UUID REFERENCES public.whatsapp_instances(id) ON DELETE CASCADE,
+  tool_name TEXT,
+  args JSONB,
+  result JSONB,
+  status TEXT,
+  error TEXT
+);
+ALTER TABLE public.ai_tool_calls ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read for owner" ON public.ai_tool_calls;
+CREATE POLICY "Enable read for owner" ON public.ai_tool_calls FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = ai_tool_calls.instance_id AND wi.tenant_id = auth.uid()
+  )
+);
+
+-- =========== GOVERNANCE RPC FUNCTIONS ===========
+
+-- Atomically increments usage count.
+CREATE OR REPLACE FUNCTION public.increment_ai_usage(p_tenant_id UUID, p_increment INT DEFAULT 1)
+RETURNS TABLE(calls INT) AS $$
+BEGIN
+  INSERT INTO public.ai_usage (day, tenant_id, calls)
+  VALUES (current_date, COALESCE(p_tenant_id, auth.uid()), p_increment)
+  ON CONFLICT (day, tenant_id) DO UPDATE
+    SET calls = public.ai_usage.calls + p_increment
+  RETURNING public.ai_usage.calls INTO calls;
+  RETURN QUERY SELECT calls;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Get current day's usage.
+CREATE OR REPLACE FUNCTION public.get_ai_usage(p_tenant UUID DEFAULT NULL)
+RETURNS TABLE(day DATE, tenant_id UUID, calls INT) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT u.day, u.tenant_id, u.calls
+  FROM public.ai_usage u
+  WHERE u.day = current_date AND u.tenant_id = COALESCE(p_tenant, auth.uid())
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Log a system alert.
+CREATE OR REPLACE FUNCTION public.log_ai_alert(p_type TEXT, p_message TEXT, p_metadata JSONB DEFAULT '{}'::jsonb)
+RETURNS VOID AS $$
+BEGIN
+  INSERT INTO public.ai_alerts (alert_type, message, metadata, tenant_id)
+  VALUES (p_type, p_message, p_metadata, auth.uid());
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =========== HARDENING FIXES & ADDITIONS ===========
+
+-- FIX: Replace with atomic claim_instance RPC to prevent race conditions.
+CREATE OR REPLACE FUNCTION public.claim_instance(p_instance_id UUID, p_hostname TEXT, p_pid INT)
+RETURNS TABLE(id UUID, claimed boolean, status TEXT) AS $$
+DECLARE
+    instance_status TEXT;
+BEGIN
+    UPDATE whatsapp_instances
+    SET worker_hostname = p_hostname, worker_pid = p_pid, last_heartbeat = now(), status = 'linking'
+    WHERE whatsapp_instances.id = p_instance_id AND is_active = true AND (worker_pid IS NULL OR worker_pid = 0)
+    RETURNING whatsapp_instances.id, true, whatsapp_instances.status INTO STRICT id, claimed, status;
+
+    IF FOUND THEN
+        RETURN NEXT;
+    ELSE
+        SELECT wi.status INTO instance_status FROM whatsapp_instances wi WHERE wi.id = p_instance_id;
+        RETURN QUERY SELECT p_instance_id, false, instance_status;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- Function to purge old telemetry data.
+CREATE OR REPLACE FUNCTION public.purge_old_telemetry()
+RETURNS void AS $$
+BEGIN
+  -- To schedule this, run the following in the Supabase SQL editor once:
+  -- SELECT cron.schedule('daily-telemetry-purge', '0 0 * * *', 'SELECT public.purge_old_telemetry()');
+  DELETE FROM public.ai_telemetry WHERE created_at < now() - interval '90 days';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- =========== GRANTS & REALTIME ===========
+
+-- Grant execute on new functions
+GRANT EXECUTE ON FUNCTION public.increment_ai_usage(UUID, INT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_ai_usage(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.log_ai_alert(TEXT, TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_instance(UUID, TEXT, INT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.purge_old_telemetry() TO service_role;
+
+-- Add new tables to realtime publication
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_telemetry') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_telemetry;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_alerts') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_alerts;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_reports') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_reports;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_usage') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_usage;
+  END IF;
+   IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_tool_calls') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_tool_calls;
+  END IF;
+END $$;
+
+
+-- RPC for AI telemetry stats (used by the new dashboard)
+CREATE OR REPLACE FUNCTION public.get_ai_telemetry_stats()
+RETURNS JSONB AS $$
+DECLARE
+    result JSONB;
+    total_calls_val INT;
+    error_count_val INT;
+    cache_count_val INT;
+BEGIN
+    SELECT 
+        COUNT(*),
+        COUNT(*) FILTER (WHERE status = 'error'),
+        COUNT(*) FILTER (WHERE status = 'cached')
+    INTO 
+        total_calls_val,
+        error_count_val,
+        cache_count_val
+    FROM public.ai_telemetry
+    WHERE tenant_id = auth.uid() AND created_at >= NOW() - INTERVAL '30 days';
+
+    SELECT jsonb_build_object(
+        'total_calls', total_calls_val,
+        'error_rate', CASE WHEN total_calls_val = 0 THEN 0.0 ELSE (error_count_val::float / total_calls_val) * 100 END,
+        'cache_hit_rate', CASE WHEN total_calls_val = 0 THEN 0.0 ELSE (cache_count_val::float / total_calls_val) * 100 END,
+        'avg_latency', (SELECT AVG(latency_ms) FROM public.ai_telemetry WHERE status='success' AND tenant_id=auth.uid() AND created_at >= NOW() - INTERVAL '30 days'),
+        'calls_by_action', (
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
+            FROM (
+                SELECT action_key, COUNT(*) as count
+                FROM public.ai_telemetry
+                WHERE tenant_id = auth.uid() AND created_at >= NOW() - INTERVAL '30 days'
+                GROUP BY action_key
+                ORDER BY count DESC
+            ) t
+        )
+    ) INTO result;
+
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY INVOKER;
+
+GRANT EXECUTE ON FUNCTION public.get_ai_telemetry_stats() TO authenticated;

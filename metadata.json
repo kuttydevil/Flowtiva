@@ -1,0 +1,53 @@
+{
+  "projectName": "Shopfront-Qatar",
+  "version": "1.0.0",
+  "lastUpdated": "2025-02-18 12:05:00",
+  "changes": [
+    {
+      "date": "2025-02-18 12:00:00",
+      "file": "components/homepage/InteractiveDemo.tsx",
+      "action": "modified",
+      "description": "Made Tooltip children optional to fix Prop type error"
+    },
+    {
+      "date": "2025-02-18 12:00:00",
+      "file": "src/components/homepage/InteractiveDemo.tsx",
+      "action": "modified",
+      "description": "Made Tooltip children optional to fix Prop type error"
+    },
+    {
+      "date": "2025-02-18 12:05:00",
+      "file": "package.json",
+      "action": "modified",
+      "description": "Removed Stripe dependencies"
+    },
+    {
+      "date": "2025-02-18 12:05:00",
+      "file": "index.html",
+      "action": "modified",
+      "description": "Removed Stripe from importmap"
+    },
+    {
+      "date": "2025-02-18 12:05:00",
+      "file": "services/myFatoorahService.ts",
+      "action": "created",
+      "description": "New service for MyFatoorah payment gateway"
+    },
+    {
+      "date": "2025-02-18 12:05:00",
+      "file": "components/billing/BillingDashboard.tsx",
+      "action": "modified",
+      "description": "Implemented full MyFatoorah payment lifecycle"
+    }
+  ],
+  "rules": {
+    "allowDeleteExistingFiles": false,
+    "allowModifyExistingCode": false,
+    "allowOverwrite": false,
+    "lineAppendOnly": true
+  },
+  "requestFramePermissions": [],
+  "name": "Flowtiva AI Business Suite",
+  "description": "An AI-powered business suite for automating WhatsApp, Instagram, CRM, and outreach, now migrated to Firebase for a robust and free backend.",
+  "majorCapabilities": []
+}

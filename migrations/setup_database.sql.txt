@@ -1,0 +1,1650 @@
+-- =================================================================
+-- FLOWTIVA WHATSAPP DASHBOARD - CANONICAL DATABASE SETUP SCRIPT
+-- =================================================================
+-- This script sets up the entire database schema for a FRESH Supabase project.
+-- It represents the final, correct state of the database.
+-- DO NOT run this on an existing project with data, as it may cause issues.
+-- For migrating existing databases, use the scripts in the /migrations folder in order.
+--
+-- The multi-tenancy model used is:
+-- - Each user in 'auth.users' is a tenant.
+-- - The 'tenant_id' column in 'whatsapp_instances' is a foreign key to 'auth.users.id'.
+-- - Row Level Security (RLS) policies ensure users can only access their own data.
+-- =================================================================
+
+-- =========== TABLE DEFINITIONS ===========
+
+-- Stores the main WhatsApp instances/accounts connected by users.
+-- tenant_id is the user's ID from auth.users.
+CREATE TABLE IF NOT EXISTS public.whatsapp_instances (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+  phone_number TEXT NOT NULL,
+  custom_prompt TEXT NOT NULL,
+  context TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'linking', 'running', 'inactive', 'failed')),
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  agent_type TEXT NOT NULL DEFAULT 'business' CHECK (agent_type IN ('business', 'personal')),
+  enabled_tools TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  last_error TEXT,
+  worker_hostname TEXT,
+  worker_pid INTEGER,
+  last_heartbeat TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_instances_tenant ON public.whatsapp_instances (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_instances_for_orchestrator ON public.whatsapp_instances (is_active, status, last_heartbeat);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_instances_heartbeat_check ON public.whatsapp_instances (status, last_heartbeat);
+
+
+-- Stores temporary codes for linking a phone to a WhatsApp instance.
+CREATE TABLE IF NOT EXISTS public.whatsapp_linking_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instance_id UUID NOT NULL REFERENCES public.whatsapp_instances(id) ON DELETE CASCADE,
+  code TEXT,
+  qr_code_data_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  CONSTRAINT code_or_qr_check CHECK (code IS NOT NULL OR qr_code_data_url IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_linking_codes_instance ON public.whatsapp_linking_codes (instance_id);
+
+-- Stores all incoming and outgoing messages for all instances.
+CREATE TABLE IF NOT EXISTS public.whatsapp_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instance_id UUID NOT NULL REFERENCES public.whatsapp_instances(id) ON DELETE CASCADE,
+  wa_message_id TEXT,
+  contact_name TEXT NOT NULL,
+  sender TEXT NOT NULL CHECK (sender IN ('user', 'ai', 'agent')),
+  message_text TEXT,
+  image_url TEXT,
+  is_read BOOLEAN DEFAULT FALSE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'sending', 'sent', 'failed', 'read')),
+  "timestamp" TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  CONSTRAINT whatsapp_messages_instance_id_wa_message_id_key UNIQUE (instance_id, wa_message_id)
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_instance_contact ON public.whatsapp_messages (instance_id, contact_name, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_sending ON public.whatsapp_messages (instance_id, status) WHERE status = 'sending';
+
+
+-- Stores additional CRM-related data for contacts.
+CREATE TABLE IF NOT EXISTS public.whatsapp_contact_profiles (
+  instance_id UUID NOT NULL REFERENCES public.whatsapp_instances(id) ON DELETE CASCADE,
+  contact_name TEXT NOT NULL,
+  tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  crm_stage TEXT DEFAULT 'New',
+  priority TEXT DEFAULT 'Low' CHECK (priority IN ('High', 'Medium', 'Low')),
+  due_date TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  PRIMARY KEY (instance_id, contact_name)
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_contact_profiles_instance_id ON public.whatsapp_contact_profiles (instance_id);
+
+-- Minimal table for contact phone numbers, referenced by get_whatsapp_contacts.
+CREATE TABLE IF NOT EXISTS public.whatsapp_contacts (
+    instance_id UUID NOT NULL REFERENCES public.whatsapp_instances(id) ON DELETE CASCADE,
+    contact_name TEXT NOT NULL,
+    phone_number TEXT,
+    PRIMARY KEY (instance_id, contact_name)
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_contacts_instance_id ON public.whatsapp_contacts (instance_id);
+
+-- Outreach Campaigns Table
+CREATE TABLE IF NOT EXISTS public.outreach_campaigns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instance_id UUID NOT NULL REFERENCES public.whatsapp_instances(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  message_template TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'running', 'paused', 'completed')),
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+-- Outreach Contacts Table
+CREATE TABLE IF NOT EXISTS public.outreach_contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id UUID NOT NULL REFERENCES public.outreach_campaigns(id) ON DELETE CASCADE,
+  phone_number TEXT NOT NULL,
+  contact_name TEXT,
+  variables JSONB,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'generating_message', 'sending', 'sent', 'failed', 'replied')),
+  generated_message TEXT,
+  sent_at TIMESTAMPTZ,
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_outreach_contacts_status ON public.outreach_contacts (campaign_id, status);
+
+-- Table for instance logs (terminal output)
+CREATE TABLE IF NOT EXISTS public.instance_logs (
+  id BIGSERIAL PRIMARY KEY,
+  instance_id UUID NOT NULL REFERENCES public.whatsapp_instances(id) ON DELETE CASCADE,
+  "timestamp" TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  level TEXT NOT NULL DEFAULT 'INFO' CHECK (level IN ('INFO', 'WARN', 'ERROR', 'FATAL', 'DEBUG')),
+  message TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_instance_logs_instance_id_timestamp ON public.instance_logs (instance_id, "timestamp" DESC);
+
+-- Table for instance commands (START/STOP)
+CREATE TABLE IF NOT EXISTS public.instance_commands (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instance_id UUID NOT NULL REFERENCES public.whatsapp_instances(id) ON DELETE CASCADE,
+  command TEXT NOT NULL CHECK (command IN ('START', 'STOP')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  error_message TEXT,
+  worker_hostname TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  processed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_instance_commands_status ON public.instance_commands (status, created_at);
+
+
+-- =========== INSTAGRAM TABLES ===========
+
+-- Stores the main Instagram instances/accounts connected by users.
+CREATE TABLE IF NOT EXISTS public.instagram_instances (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+  username TEXT NOT NULL,
+  password TEXT NOT NULL, -- NOTE: In a real production app, this should be encrypted.
+  custom_prompt TEXT NOT NULL,
+  context TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'linking', 'running', 'inactive', 'failed')),
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  last_error TEXT,
+  worker_hostname TEXT,
+  worker_pid INTEGER,
+  last_heartbeat TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_instagram_instances_tenant ON public.instagram_instances (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_insta_instances_for_orchestrator ON public.instagram_instances (is_active, status, last_heartbeat);
+
+-- Stores all Instagram DM messages.
+CREATE TABLE IF NOT EXISTS public.instagram_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instance_id UUID NOT NULL REFERENCES public.instagram_instances(id) ON DELETE CASCADE,
+  contact_username TEXT NOT NULL,
+  sender TEXT NOT NULL CHECK (sender IN ('user', 'ai', 'agent')),
+  message_text TEXT,
+  image_url TEXT,
+  is_read BOOLEAN DEFAULT FALSE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'sending', 'sent', 'failed', 'read')),
+  "timestamp" TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_instagram_messages_instance_contact ON public.instagram_messages (instance_id, contact_username, "timestamp" DESC);
+
+-- Stores additional CRM-like data for Instagram contacts.
+CREATE TABLE IF NOT EXISTS public.instagram_contact_profiles (
+  instance_id UUID NOT NULL REFERENCES public.instagram_instances(id) ON DELETE CASCADE,
+  contact_username TEXT NOT NULL,
+  tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  PRIMARY KEY (instance_id, contact_username)
+);
+CREATE INDEX IF NOT EXISTS idx_instagram_contact_profiles_instance_id ON public.instagram_contact_profiles (instance_id);
+
+
+-- =========== WORKFLOW TABLES ===========
+
+CREATE TABLE IF NOT EXISTS public.workflows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+  name TEXT NOT NULL,
+  trigger_type TEXT NOT NULL CHECK (trigger_type IN ('new_contact_message', 'contact_replied', 'crm_stage_changed', 'tag_added', 'message_contains_keyword', 'priority_changed')),
+  trigger_config JSONB,
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workflows_tenant_id ON public.workflows (tenant_id);
+
+CREATE TABLE IF NOT EXISTS public.workflow_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workflow_id UUID NOT NULL REFERENCES public.workflows(id) ON DELETE CASCADE,
+  step_order INT NOT NULL,
+  action_type TEXT NOT NULL CHECK (action_type IN ('send_whatsapp_message', 'add_tag', 'change_crm_stage', 'wait')),
+  action_config JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workflow_actions_workflow_id ON public.workflow_actions (workflow_id);
+
+CREATE TABLE IF NOT EXISTS public.workflow_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workflow_id UUID NOT NULL REFERENCES public.workflows(id) ON DELETE CASCADE,
+  tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  triggered_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  trigger_event JSONB,
+  status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+  actions_log JSONB,
+  error_message TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_workflow_history_workflow_id ON public.workflow_history (workflow_id, triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_workflow_history_tenant_id ON public.workflow_history (tenant_id);
+
+
+-- =========== GOVERNANCE & TELEMETRY TABLES ===========
+
+-- 1. ai_telemetry: Raw telemetry data for analysis.
+CREATE TABLE IF NOT EXISTS public.ai_telemetry (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  tenant_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  action_key TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('success', 'error', 'cached')),
+  latency_ms INT,
+  error_message TEXT,
+  payload JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_ai_telemetry_created_at ON public.ai_telemetry(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_telemetry_action_key ON public.ai_telemetry(action_key);
+
+
+-- 2. ai_usage: Atomic daily counters for cost control.
+CREATE TABLE IF NOT EXISTS public.ai_usage (
+  id BIGSERIAL PRIMARY KEY,
+  day DATE NOT NULL,
+  tenant_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  calls INT DEFAULT 0,
+  UNIQUE(day, tenant_id)
+);
+
+
+-- 3. ai_alerts: Stores critical system alerts detected by the frontend or backend.
+CREATE TABLE IF NOT EXISTS public.ai_alerts (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  alert_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  metadata JSONB,
+  tenant_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+);
+
+
+-- 4. ai_reports: Stores automated weekly/monthly performance reports.
+CREATE TABLE IF NOT EXISTS public.ai_reports (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  period TEXT NOT NULL CHECK (period IN ('weekly', 'monthly')),
+  content TEXT NOT NULL,
+  metadata JSONB
+);
+
+
+-- 5. ai_tool_calls: Audit trail for all AI function calls.
+CREATE TABLE IF NOT EXISTS public.ai_tool_calls (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  tenant_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  instance_id UUID REFERENCES public.whatsapp_instances(id) ON DELETE CASCADE,
+  tool_name TEXT,
+  args JSONB,
+  result JSONB,
+  status TEXT,
+  error TEXT
+);
+
+-- =========== BILLING TABLES ===========
+
+CREATE TABLE IF NOT EXISTS public.plans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  price_monthly INT NOT NULL,
+  price_yearly INT NOT NULL,
+  description TEXT,
+  features TEXT[] NOT NULL,
+  message_limit INT NOT NULL,
+  account_limit INT NOT NULL,
+  is_popular BOOLEAN DEFAULT FALSE
+);
+
+DO $$
+DECLARE
+    con_name text;
+BEGIN
+    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'subscriptions') THEN
+        SELECT c.conname INTO con_name
+        FROM pg_constraint c
+        JOIN pg_class t ON c.conrelid = t.oid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+        WHERE t.relname = 'subscriptions' AND a.attname = 'status' AND c.contype = 'c'
+          AND pg_get_constraintdef(c.oid) NOT LIKE '%trialing%';
+          
+        IF con_name IS NOT NULL THEN
+            EXECUTE 'ALTER TABLE public.subscriptions DROP CONSTRAINT ' || quote_ident(con_name);
+        END IF;
+    END IF;
+END;
+$$;
+
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  plan_id UUID NOT NULL REFERENCES public.plans(id),
+  status TEXT NOT NULL,
+  billing_cycle TEXT NOT NULL CHECK (billing_cycle IN ('monthly', 'yearly')),
+  current_period_start TIMESTAMPTZ NOT NULL,
+  current_period_end TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'subscriptions_status_check' AND conrelid = 'public.subscriptions'::regclass
+    ) THEN
+        ALTER TABLE public.subscriptions
+        ADD CONSTRAINT subscriptions_status_check CHECK (status IN ('active', 'trialing', 'canceled', 'past_due'));
+    END IF;
+END;
+$$;
+
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_tenant_id ON public.subscriptions (tenant_id);
+
+CREATE TABLE IF NOT EXISTS public.payment_methods (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  card_type TEXT NOT NULL,
+  last4 TEXT NOT NULL,
+  expiry TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_methods_tenant_id ON public.payment_methods (tenant_id);
+
+CREATE TABLE IF NOT EXISTS public.invoices (
+  id TEXT PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  subscription_id UUID NOT NULL REFERENCES public.subscriptions(id),
+  date TIMESTAMPTZ NOT NULL,
+  amount INT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('Paid', 'Due', 'Failed')),
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_invoices_tenant_id ON public.invoices (tenant_id);
+
+
+-- =========== ROW LEVEL SECURITY (RLS) ===========
+
+-- Enable RLS for all tables.
+ALTER TABLE public.whatsapp_instances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_linking_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_contact_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.outreach_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.outreach_contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.instance_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.instance_commands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workflows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workflow_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workflow_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_telemetry ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_tool_calls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.instagram_instances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.instagram_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.instagram_contact_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_methods ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can only see and manage their own instances.
+DROP POLICY IF EXISTS "Enable all access for users based on tenant_id" ON public.whatsapp_instances;
+CREATE POLICY "Enable all access for users based on tenant_id" ON public.whatsapp_instances
+  FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+
+-- Policy: Users can only access linking codes for instances they own.
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.whatsapp_linking_codes;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.whatsapp_linking_codes
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = whatsapp_linking_codes.instance_id AND wi.tenant_id = auth.uid()
+  ));
+
+-- Policy: Users can perform all actions on messages for instances they own.
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.whatsapp_messages;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.whatsapp_messages
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = whatsapp_messages.instance_id AND wi.tenant_id = auth.uid()
+  )) WITH CHECK (EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = whatsapp_messages.instance_id AND wi.tenant_id = auth.uid()
+  ));
+
+-- Policy: Users can only access contact profiles for instances they own.
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.whatsapp_contact_profiles;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.whatsapp_contact_profiles
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = whatsapp_contact_profiles.instance_id AND wi.tenant_id = auth.uid()
+  ));
+
+-- Policy: Users can only access contacts for instances they own.
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.whatsapp_contacts;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.whatsapp_contacts
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = whatsapp_contacts.instance_id AND wi.tenant_id = auth.uid()
+  ));
+  
+-- Policy: Outreach Campaigns
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.outreach_campaigns;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.outreach_campaigns
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = outreach_campaigns.instance_id AND wi.tenant_id = auth.uid()
+  ));
+
+-- Policy: Outreach Contacts
+DROP POLICY IF EXISTS "Enable all access for users based on campaign ownership" ON public.outreach_contacts;
+CREATE POLICY "Enable all access for users based on campaign ownership" ON public.outreach_contacts
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.outreach_campaigns oc
+    JOIN public.whatsapp_instances wi ON oc.instance_id = wi.id
+    WHERE oc.id = outreach_contacts.campaign_id AND wi.tenant_id = auth.uid()
+  ));
+
+-- Policy: Instance Logs
+DROP POLICY IF EXISTS "Enable read access for users based on instance ownership" ON public.instance_logs;
+CREATE POLICY "Enable read access for users based on instance ownership" ON public.instance_logs
+  FOR SELECT USING (EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = instance_logs.instance_id AND wi.tenant_id = auth.uid()
+  ));
+
+-- Policy: Instance Commands
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.instance_commands;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.instance_commands
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = instance_commands.instance_id AND wi.tenant_id = auth.uid()
+  ));
+
+-- RLS for workflows
+DROP POLICY IF EXISTS "Enable all access for users based on tenant_id" ON public.workflows;
+CREATE POLICY "Enable all access for users based on tenant_id" ON public.workflows
+  FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+
+-- RLS for workflow_actions
+DROP POLICY IF EXISTS "Enable all access for users based on workflow ownership" ON public.workflow_actions;
+CREATE POLICY "Enable all access for users based on workflow ownership" ON public.workflow_actions
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.workflows w
+    WHERE w.id = workflow_actions.workflow_id AND w.tenant_id = auth.uid()
+  ));
+
+-- RLS for workflow_history
+DROP POLICY IF EXISTS "Enable read access for users based on tenant_id" ON public.workflow_history;
+CREATE POLICY "Enable read access for users based on tenant_id" ON public.workflow_history
+  FOR SELECT USING (tenant_id = auth.uid());
+
+-- RLS for AI Governance Tables
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON public.ai_telemetry;
+CREATE POLICY "Enable insert for authenticated users" ON public.ai_telemetry FOR INSERT TO authenticated WITH CHECK (tenant_id = auth.uid());
+DROP POLICY IF EXISTS "Enable read for owner" ON public.ai_telemetry;
+CREATE POLICY "Enable read for owner" ON public.ai_telemetry FOR SELECT USING (tenant_id = auth.uid());
+
+DROP POLICY IF EXISTS "Enable all for owner" ON public.ai_usage;
+CREATE POLICY "Enable all for owner" ON public.ai_usage FOR ALL USING (tenant_id = auth.uid());
+
+DROP POLICY IF EXISTS "Enable read for owner" ON public.ai_alerts;
+DROP POLICY IF EXISTS "Enable all for owner" ON public.ai_alerts;
+CREATE POLICY "Enable all for owner" ON public.ai_alerts
+  FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+
+DROP POLICY IF EXISTS "Enable read for owner" ON public.ai_reports;
+CREATE POLICY "Enable read for owner" ON public.ai_reports FOR SELECT USING (tenant_id = auth.uid());
+
+DROP POLICY IF EXISTS "Enable read for owner" ON public.ai_tool_calls;
+CREATE POLICY "Enable read for owner" ON public.ai_tool_calls FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.whatsapp_instances wi
+    WHERE wi.id = ai_tool_calls.instance_id AND wi.tenant_id = auth.uid()
+  )
+);
+
+-- RLS for Instagram tables
+DROP POLICY IF EXISTS "Enable all access for users based on tenant_id" ON public.instagram_instances;
+CREATE POLICY "Enable all access for users based on tenant_id" ON public.instagram_instances
+  FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.instagram_messages;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.instagram_messages
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.instagram_instances ii
+    WHERE ii.id = instagram_messages.instance_id AND ii.tenant_id = auth.uid()
+  ));
+
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.instagram_contact_profiles;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.instagram_contact_profiles
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.instagram_instances ii
+    WHERE ii.id = instagram_contact_profiles.instance_id AND ii.tenant_id = auth.uid()
+  ));
+
+-- RLS for Billing Tables
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.plans;
+CREATE POLICY "Enable read access for all users" ON public.plans FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Enable all access for users on their own subscription" ON public.subscriptions;
+CREATE POLICY "Enable all access for users on their own subscription" ON public.subscriptions FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+DROP POLICY IF EXISTS "Enable all access for users on their own payment methods" ON public.payment_methods;
+CREATE POLICY "Enable all access for users on their own payment methods" ON public.payment_methods FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+DROP POLICY IF EXISTS "Enable all access for users on their own invoices" ON public.invoices;
+CREATE POLICY "Enable all access for users on their own invoices" ON public.invoices FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+
+
+-- =========== DATA SEEDING ===========
+
+INSERT INTO public.plans (id, name, price_monthly, price_yearly, description, features, message_limit, account_limit, is_popular)
+VALUES
+  ('a8a9e735-8a2a-48a5-9336-3b2d12660251', 'Starter', 79, 790, 'Perfect for individuals and personal projects.', '{"1 WhatsApp Account", "2,000 AI Messages / month", "Live Chat Dashboard", "Standard Email Support"}', 2000, 1, false),
+  ('b3d5b0a3-5b8e-4a4e-8b4b-9b0d2972e391', 'Pro', 149, 1490, 'Ideal for small businesses and power users.', '{"Up to 5 WhatsApp Accounts", "10,000 AI Messages / month", "Live Chat Dashboard", "Priority Email Support", "Custom AI Prompts"}', 10000, 5, true),
+  ('c7f8a1b2-9c3d-4e5f-a6b7-8d9e0f1a2b3c', 'Business', 299, 2990, 'For agencies and teams managing multiple clients.', '{"Up to 15 WhatsApp Accounts", "30,000 AI Messages / month", "All Pro Features", "Dedicated Account Manager", "API Access (Coming Soon)"}', 30000, 15, false)
+ON CONFLICT (name) DO UPDATE SET
+  price_monthly = EXCLUDED.price_monthly,
+  price_yearly = EXCLUDED.price_yearly,
+  description = EXCLUDED.description,
+  features = EXCLUDED.features,
+  message_limit = EXCLUDED.message_limit,
+  account_limit = EXCLUDED.account_limit,
+  is_popular = EXCLUDED.is_popular;
+
+
+-- =========== RPC FUNCTIONS (Largely unchanged, but secured by RLS on tables) ===========
+
+-- RPC for the orchestrator to claim the next pending command.
+DROP FUNCTION IF EXISTS public.claim_next_command(p_worker_hostname TEXT);
+CREATE OR REPLACE FUNCTION public.claim_next_command(p_worker_hostname TEXT)
+RETURNS TABLE (
+  id UUID,
+  instance_id UUID,
+  command TEXT
+)
+LANGUAGE plpgsql
+-- SECURITY DEFINER is needed to bypass RLS for the orchestrator, which uses a service_role key.
+SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  claimed_command RECORD;
+BEGIN
+  -- Atomically find and claim the next pending command
+  UPDATE public.instance_commands
+  SET
+    status = 'processing',
+    worker_hostname = p_worker_hostname,
+    processed_at = NOW()
+  WHERE public.instance_commands.id = (
+    SELECT ic.id
+    FROM public.instance_commands ic
+    WHERE ic.status = 'pending'
+    ORDER BY ic.created_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+  )
+  RETURNING * INTO claimed_command;
+
+  IF claimed_command IS NOT NULL THEN
+    RETURN QUERY SELECT claimed_command.id, claimed_command.instance_id, claimed_command.command;
+  END IF;
+END;
+$$;
+
+
+-- NEW RPC for a worker to atomically claim an instance.
+-- Returns the claimed instance row on success, or nothing on failure (if already claimed).
+DROP FUNCTION IF EXISTS public.claim_instance(UUID, TEXT, INT);
+CREATE OR REPLACE FUNCTION public.claim_instance(p_instance_id UUID, p_hostname TEXT, p_pid INT)
+RETURNS TABLE(id UUID, claimed boolean, status TEXT) AS $$
+DECLARE
+    instance_status TEXT;
+BEGIN
+    UPDATE whatsapp_instances
+    SET worker_hostname = p_hostname, worker_pid = p_pid, last_heartbeat = now(), status = 'linking'
+    WHERE whatsapp_instances.id = p_instance_id AND is_active = true AND (worker_pid IS NULL OR worker_pid = 0)
+    RETURNING whatsapp_instances.id, true, whatsapp_instances.status INTO STRICT id, claimed, status;
+
+    IF FOUND THEN
+        RETURN NEXT;
+    ELSE
+        SELECT wi.status INTO instance_status FROM whatsapp_instances wi WHERE wi.id = p_instance_id;
+        RETURN QUERY SELECT p_instance_id, false, instance_status;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- Get a comprehensive list of contacts for an instance, including CRM data and last message details.
+-- The function is secure because it runs with invoker permissions (default), and RLS on the underlying tables is enforced.
+DROP FUNCTION IF EXISTS public.get_whatsapp_contacts(p_instance_id uuid);
+CREATE OR REPLACE FUNCTION public.get_whatsapp_contacts(p_instance_id uuid)
+RETURNS TABLE (
+  contact_name text,
+  phone_number text,
+  tags text[],
+  crm_stage text,
+  last_message_text text,
+  last_message_at timestamptz,
+  unread_count bigint,
+  priority text,
+  due_date timestamptz
+)
+LANGUAGE sql STABLE AS $$
+  -- RLS is enforced on the tables being queried, as this function runs with invoker's permissions.
+  WITH all_contacts_for_instance AS (
+    -- Get all unique contact names from both messages and profiles for the given instance
+    SELECT contact_name FROM public.whatsapp_messages WHERE instance_id = p_instance_id
+    UNION
+    SELECT contact_name FROM public.whatsapp_contact_profiles WHERE instance_id = p_instance_id
+  )
+  SELECT
+    aci.contact_name,
+    c.phone_number,
+    COALESCE(cp.tags, ARRAY[]::text[]) AS tags,
+    COALESCE(cp.crm_stage, 'New') AS crm_stage,
+    lm.message_text AS last_message_text,
+    lm."timestamp" AS last_message_at,
+    COALESCE(ur.unread_count, 0) AS unread_count,
+    COALESCE(cp.priority, 'Low') AS priority,
+    cp.due_date
+  FROM all_contacts_for_instance aci
+  LEFT JOIN public.whatsapp_contact_profiles cp
+    ON aci.contact_name = cp.contact_name AND cp.instance_id = p_instance_id
+  LEFT JOIN public.whatsapp_contacts c
+    ON aci.contact_name = c.contact_name AND c.instance_id = p_instance_id
+  LEFT JOIN LATERAL (
+    SELECT message_text, "timestamp"
+    FROM public.whatsapp_messages
+    WHERE instance_id = p_instance_id AND contact_name = aci.contact_name
+    ORDER BY "timestamp" DESC
+    LIMIT 1
+  ) lm ON true
+  LEFT JOIN LATERAL (
+    SELECT COUNT(1)::bigint AS unread_count
+    FROM public.whatsapp_messages
+    WHERE instance_id = p_instance_id
+      AND contact_name = aci.contact_name
+      AND is_read = false
+      AND sender = 'user'
+  ) ur ON true
+  ORDER BY lm."timestamp" DESC NULLS LAST;
+$$;
+
+-- Mark messages for a contact as read.
+CREATE OR REPLACE FUNCTION public.mark_messages_read(p_contact_name text, p_instance_id uuid)
+RETURNS void
+LANGUAGE sql AS $$
+  -- RLS is enforced on the whatsapp_messages table, as this function runs with invoker's permissions.
+  UPDATE public.whatsapp_messages
+  SET is_read = true
+  WHERE instance_id = p_instance_id AND contact_name = p_contact_name AND is_read = false;
+$$;
+
+-- Upsert contact tags.
+CREATE OR REPLACE FUNCTION public.update_contact_tags(p_instance_id UUID, p_contact_name TEXT, p_tags TEXT[])
+RETURNS VOID
+LANGUAGE plpgsql AS $$
+BEGIN
+  -- RLS is enforced on the whatsapp_contact_profiles table, as this function runs with invoker's permissions.
+  INSERT INTO public.whatsapp_contact_profiles (instance_id, contact_name, tags, updated_at)
+  VALUES (p_instance_id, p_contact_name, p_tags, NOW())
+  ON CONFLICT (instance_id, contact_name)
+  DO UPDATE SET
+    tags = EXCLUDED.tags,
+    updated_at = NOW();
+END;
+$$;
+
+-- Upsert contact CRM stage.
+CREATE OR REPLACE FUNCTION public.update_contact_crm_stage(p_instance_id UUID, p_contact_name TEXT, p_crm_stage TEXT)
+RETURNS VOID
+LANGUAGE plpgsql AS $$
+BEGIN
+  -- RLS is enforced on the whatsapp_contact_profiles table, as this function runs with invoker's permissions.
+  INSERT INTO public.whatsapp_contact_profiles (instance_id, contact_name, crm_stage, updated_at)
+  VALUES (p_instance_id, p_contact_name, p_crm_stage, NOW())
+  ON CONFLICT (instance_id, contact_name)
+  DO UPDATE SET
+    crm_stage = EXCLUDED.crm_stage,
+    updated_at = NOW();
+END;
+$$;
+
+-- Upsert contact due date.
+CREATE OR REPLACE FUNCTION public.update_contact_due_date(p_instance_id UUID, p_contact_name TEXT, p_due_date TIMESTAMPTZ)
+RETURNS VOID
+LANGUAGE plpgsql AS $$
+BEGIN
+  -- RLS is enforced on the whatsapp_contact_profiles table, as this function runs with invoker's permissions.
+  INSERT INTO public.whatsapp_contact_profiles (instance_id, contact_name, due_date, updated_at)
+  VALUES (p_instance_id, p_contact_name, p_due_date, NOW())
+  ON CONFLICT (instance_id, contact_name)
+  DO UPDATE SET
+    due_date = EXCLUDED.due_date,
+    updated_at = NOW();
+END;
+$$;
+
+-- Upsert contact priority.
+CREATE OR REPLACE FUNCTION public.update_contact_priority(p_instance_id UUID, p_contact_name TEXT, p_priority TEXT)
+RETURNS VOID
+LANGUAGE plpgsql AS $$
+BEGIN
+  -- RLS is enforced on the whatsapp_contact_profiles table, as this function runs with invoker's permissions.
+  INSERT INTO public.whatsapp_contact_profiles (instance_id, contact_name, priority, updated_at)
+  VALUES (p_instance_id, p_contact_name, p_priority, NOW())
+  ON CONFLICT (instance_id, contact_name)
+  DO UPDATE SET
+    priority = EXCLUDED.priority,
+    updated_at = NOW();
+END;
+$$;
+
+-- RPC for securely sending agent messages
+DROP FUNCTION IF EXISTS public.send_agent_message(UUID,TEXT,TEXT,TEXT);
+CREATE OR REPLACE FUNCTION public.send_agent_message(
+  p_instance_id UUID,
+  p_contact_name TEXT,
+  p_message_text TEXT DEFAULT NULL,
+  p_image_base64 TEXT DEFAULT NULL
+)
+RETURNS UUID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  new_message_id UUID;
+BEGIN
+  -- RLS policy on whatsapp_messages table will enforce ownership.
+  INSERT INTO public.whatsapp_messages(instance_id, contact_name, sender, message_text, image_url, is_read, status)
+  VALUES (p_instance_id, p_contact_name, 'agent', p_message_text, p_image_base64, true, 'sending')
+  RETURNING id INTO new_message_id;
+  
+  RETURN new_message_id;
+END;
+$$;
+
+-- RPC for securely inserting instance logs from the backend worker
+CREATE OR REPLACE FUNCTION public.log_message(
+  p_instance_id UUID,
+  p_level TEXT,
+  p_message TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY INVOKER -- Use invoker security and call with service_role key.
+AS $$
+BEGIN
+  -- This function is called by the backend worker using service_role,
+  -- which bypasses RLS, so the insert will succeed. This change from
+  -- SECURITY DEFINER ensures Realtime events are correctly propagated.
+  INSERT INTO public.instance_logs(instance_id, level, message)
+  VALUES (p_instance_id, p_level, p_message);
+END;
+$$;
+
+-- RPC for dashboard stats
+DROP FUNCTION IF EXISTS public.get_dashboard_stats();
+CREATE OR REPLACE FUNCTION public.get_dashboard_stats()
+RETURNS TABLE (
+  total_contacts BIGINT,
+  messages_last_24h BIGINT,
+  active_instances BIGINT,
+  failed_instances BIGINT
+)
+LANGUAGE sql STABLE SECURITY INVOKER AS $$
+  SELECT
+    (SELECT count(DISTINCT contact_name) FROM public.whatsapp_messages wm JOIN public.whatsapp_instances wi ON wm.instance_id = wi.id WHERE wi.tenant_id = auth.uid()) AS total_contacts,
+    (SELECT count(*) FROM public.whatsapp_messages wm JOIN public.whatsapp_instances wi ON wm.instance_id = wi.id WHERE wi.tenant_id = auth.uid() AND wm."timestamp" > now() - interval '24 hours') AS messages_last_24h,
+    (SELECT count(*) FROM public.whatsapp_instances WHERE tenant_id = auth.uid() AND status = 'running') as active_instances,
+    (SELECT count(*) FROM public.whatsapp_instances WHERE tenant_id = auth.uid() AND status = 'failed') as failed_instances;
+$$;
+
+-- RPC for recent activity feed
+DROP FUNCTION IF EXISTS public.get_recent_activity();
+CREATE OR REPLACE FUNCTION public.get_recent_activity()
+RETURNS TABLE (
+  instance_id UUID,
+  phone_number TEXT,
+  contact_name TEXT,
+  message_text TEXT,
+  "timestamp" TIMESTAMPTZ
+)
+LANGUAGE sql STABLE SECURITY INVOKER AS $$
+  SELECT
+    wm.instance_id,
+    wi.phone_number,
+    wm.contact_name,
+    wm.message_text,
+    wm.timestamp
+  FROM public.whatsapp_messages wm
+  JOIN public.whatsapp_instances wi ON wm.instance_id = wi.id
+  WHERE wi.tenant_id = auth.uid()
+    AND wm.sender = 'user'
+    AND wm.message_text IS NOT NULL
+  ORDER BY wm.timestamp DESC
+  LIMIT 5;
+$$;
+
+-- RPC for manually creating a contact
+DROP FUNCTION IF EXISTS public.create_manual_contact(UUID, TEXT, TEXT, TEXT[]);
+CREATE OR REPLACE FUNCTION public.create_manual_contact(
+  p_instance_id UUID,
+  p_contact_name TEXT,
+  p_phone_number TEXT,
+  p_tags TEXT[]
+)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  -- RLS is enforced on these tables via policies, function uses invoker security.
+  -- First, check for conflict to provide a clearer error message.
+  IF EXISTS (
+    SELECT 1 FROM public.whatsapp_contact_profiles 
+    WHERE instance_id = p_instance_id AND contact_name = p_contact_name
+  ) THEN
+    RAISE EXCEPTION 'A contact with this name already exists for this instance.';
+  END IF;
+
+  -- Insert into profiles first, as it's the main CRM record.
+  INSERT INTO public.whatsapp_contact_profiles (instance_id, contact_name, tags, crm_stage, priority)
+  VALUES (p_instance_id, p_contact_name, p_tags, 'New', 'Low');
+
+  -- Also insert into the contacts table if a phone number is provided.
+  IF p_phone_number IS NOT NULL AND p_phone_number <> '' THEN
+    INSERT INTO public.whatsapp_contacts (instance_id, contact_name, phone_number)
+    VALUES (p_instance_id, p_contact_name, p_phone_number)
+    ON CONFLICT (instance_id, contact_name) DO NOTHING;
+  END IF;
+END;
+$$;
+
+
+-- =========== OUTREACH RPC FUNCTIONS ===========
+
+DROP FUNCTION IF EXISTS public.get_outreach_campaigns();
+CREATE OR REPLACE FUNCTION public.get_outreach_campaigns()
+RETURNS TABLE (
+  id UUID,
+  instance_id UUID,
+  name TEXT,
+  message_template TEXT,
+  status TEXT,
+  created_at TIMESTAMPTZ,
+  contacts_total BIGINT,
+  contacts_sent BIGINT,
+  contacts_failed BIGINT,
+  contacts_replied BIGINT
+)
+LANGUAGE sql STABLE AS $$
+  -- RLS is enforced on the outreach_campaigns table, securing this function as it runs with invoker permissions.
+  SELECT
+    oc.id,
+    oc.instance_id,
+    oc.name,
+    oc.message_template,
+    oc.status,
+    oc.created_at,
+    COALESCE(cs.total, 0) AS contacts_total,
+    COALESCE(cs.sent, 0) AS contacts_sent,
+    COALESCE(cs.failed, 0) AS contacts_failed,
+    COALESCE(cs.replied, 0) AS contacts_replied
+  FROM
+    public.outreach_campaigns oc
+  LEFT JOIN LATERAL (
+    SELECT
+      count(*) AS total,
+      count(*) FILTER (WHERE status = 'sent') AS sent,
+      count(*) FILTER (WHERE status = 'failed') AS failed,
+      count(*) FILTER (WHERE status = 'replied') AS replied
+    FROM public.outreach_contacts
+    WHERE campaign_id = oc.id
+  ) cs ON true
+  ORDER BY oc.created_at DESC;
+$$;
+
+CREATE OR REPLACE FUNCTION public.create_outreach_campaign(
+  p_instance_id UUID,
+  p_name TEXT,
+  p_message_template TEXT,
+  p_contacts JSONB
+)
+RETURNS json
+LANGUAGE plpgsql AS $$
+DECLARE
+  v_campaign_id UUID;
+  contact_record JSONB;
+  new_campaign_record public.outreach_campaigns;
+BEGIN
+  -- RLS on whatsapp_instances table ensures this check is secure because the function runs with invoker permissions.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.whatsapp_instances WHERE id = p_instance_id
+  ) THEN
+    RAISE EXCEPTION 'Instance not found or permission denied';
+  END IF;
+
+  INSERT INTO public.outreach_campaigns(instance_id, name, message_template)
+  VALUES (p_instance_id, p_name, p_message_template)
+  RETURNING * INTO new_campaign_record;
+  
+  v_campaign_id := new_campaign_record.id;
+
+  FOR contact_record IN SELECT * FROM jsonb_array_elements(p_contacts)
+  LOOP
+    INSERT INTO public.outreach_contacts(campaign_id, phone_number, contact_name, variables)
+    VALUES (
+      v_campaign_id,
+      contact_record->>'phone_number',
+      contact_record->>'contact_name',
+      (contact_record->'variables')::jsonb
+    );
+  END LOOP;
+
+  RETURN to_json(new_campaign_record);
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public.get_pending_outreach_contact(p_instance_id UUID);
+CREATE OR REPLACE FUNCTION public.get_pending_outreach_contact(p_instance_id UUID)
+RETURNS TABLE (
+  id UUID,
+  campaign_id UUID,
+  phone_number TEXT,
+  contact_name TEXT,
+  variables JSONB,
+  message_template TEXT
+)
+LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  -- This function is intended for service_role_key access from the backend.
+  -- It is secure because it's filtered by the instance_id the worker is assigned to.
+  SELECT
+    oc.id,
+    oc.campaign_id,
+    oc.phone_number,
+    oc.contact_name,
+    oc.variables,
+    camp.message_template
+  FROM public.outreach_contacts oc
+  JOIN public.outreach_campaigns camp ON oc.campaign_id = camp.id
+  WHERE camp.instance_id = p_instance_id
+    AND camp.status = 'running'
+    AND oc.status = 'pending'
+  ORDER BY oc.created_at
+  LIMIT 1;
+$$;
+
+
+-- =========== SUPERADMIN FUNCTIONS ===========
+
+-- Helper to check if a user is the superadmin.
+CREATE OR REPLACE FUNCTION public.is_superadmin(p_user_email TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN p_user_email = 'flowtiva@gmail.com';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Get system-wide statistics (superadmin only).
+DROP FUNCTION IF EXISTS public.get_system_stats();
+CREATE OR REPLACE FUNCTION public.get_system_stats()
+RETURNS TABLE (
+  total_users BIGINT,
+  total_instances BIGINT,
+  active_instances BIGINT,
+  messages_last_24h BIGINT
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+BEGIN
+  IF NOT is_superadmin((SELECT auth.jwt()->>'email')) THEN
+    RAISE EXCEPTION 'Permission denied: Superadmin access required.';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    (SELECT count(*) FROM auth.users) AS total_users,
+    (SELECT count(*) FROM public.whatsapp_instances) AS total_instances,
+    (SELECT count(*) FROM public.whatsapp_instances WHERE status = 'running') AS active_instances,
+    (SELECT count(*) FROM public.whatsapp_messages WHERE "timestamp" > now() - interval '24 hours') AS messages_last_24h;
+END;
+$$;
+
+-- Get a list of all users on the platform (superadmin only).
+DROP FUNCTION IF EXISTS public.get_all_users();
+CREATE OR REPLACE FUNCTION public.get_all_users()
+RETURNS TABLE (
+  id UUID,
+  email TEXT,
+  created_at TIMESTAMPTZ,
+  last_sign_in_at TIMESTAMPTZ,
+  plan_name TEXT,
+  subscription_status TEXT,
+  billing_cycle TEXT,
+  instance_count BIGINT
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+BEGIN
+  IF NOT is_superadmin((SELECT auth.jwt()->>'email')) THEN
+    RAISE EXCEPTION 'Permission denied: Superadmin access required.';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    u.id,
+    u.email::text,
+    u.created_at,
+    u.last_sign_in_at,
+    p.name AS plan_name,
+    s.status AS subscription_status,
+    s.billing_cycle,
+    (SELECT count(*) FROM public.whatsapp_instances wi WHERE wi.tenant_id = u.id) AS instance_count
+  FROM auth.users u
+  LEFT JOIN public.subscriptions s ON u.id = s.tenant_id
+  LEFT JOIN public.plans p ON s.plan_id = p.id
+  ORDER BY u.created_at DESC;
+END;
+$$;
+
+-- Get all instances across all tenants (superadmin only).
+DROP FUNCTION IF EXISTS public.get_all_instances();
+CREATE OR REPLACE FUNCTION public.get_all_instances()
+RETURNS TABLE (
+  id UUID,
+  phone_number TEXT,
+  status TEXT,
+  is_active BOOLEAN,
+  created_at TIMESTAMPTZ,
+  last_error TEXT,
+  owner_email TEXT,
+  worker_hostname TEXT,
+  worker_pid INT,
+  last_heartbeat TIMESTAMPTZ
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+BEGIN
+  IF NOT is_superadmin((SELECT auth.jwt()->>'email')) THEN
+    RAISE EXCEPTION 'Permission denied: Superadmin access required.';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    wi.id,
+    wi.phone_number,
+    wi.status,
+    wi.is_active,
+    wi.created_at,
+    wi.last_error,
+    u.email::text as owner_email,
+    wi.worker_hostname,
+    wi.worker_pid,
+    wi.last_heartbeat
+  FROM public.whatsapp_instances wi
+  JOIN auth.users u ON wi.tenant_id = u.id
+  ORDER BY wi.created_at DESC;
+END;
+$$;
+
+-- New function for superadmin to force stop a worker
+CREATE OR REPLACE FUNCTION public.force_stop_instance(p_instance_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+BEGIN
+  IF NOT is_superadmin((SELECT auth.jwt()->>'email')) THEN
+    RAISE EXCEPTION 'Permission denied: Superadmin access required.';
+  END IF;
+
+  UPDATE public.whatsapp_instances
+  SET
+    is_active = false,
+    last_error = 'Forcibly stopped by superadmin.'
+  WHERE id = p_instance_id;
+END;
+$$;
+
+-- New function for superadmin to view system-wide logs
+DROP FUNCTION IF EXISTS public.get_system_logs(p_limit INT);
+CREATE OR REPLACE FUNCTION public.get_system_logs(p_limit INT DEFAULT 100)
+RETURNS TABLE (
+    id BIGINT,
+    "timestamp" TIMESTAMPTZ,
+    level TEXT,
+    message TEXT,
+    instance_id UUID,
+    phone_number TEXT
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+BEGIN
+  IF NOT is_superadmin((SELECT auth.jwt()->>'email')) THEN
+    RAISE EXCEPTION 'Permission denied: Superadmin access required.';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    l.id,
+    l.timestamp,
+    l.level,
+    l.message,
+    l.instance_id,
+    wi.phone_number
+  FROM public.instance_logs l
+  JOIN public.whatsapp_instances wi ON l.instance_id = wi.id
+  WHERE l.level IN ('ERROR', 'FATAL')
+  ORDER BY l.timestamp DESC
+  LIMIT p_limit;
+END;
+$$;
+
+-- New RPC for the orchestrator to find zombie instances on its own host.
+DROP FUNCTION IF EXISTS public.get_zombie_instances(p_hostname TEXT, p_threshold_seconds INT);
+CREATE OR REPLACE FUNCTION public.get_zombie_instances(p_hostname TEXT, p_threshold_seconds INT)
+RETURNS TABLE (
+  id UUID,
+  worker_pid INT
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT
+    wi.id,
+    wi.worker_pid
+  FROM public.whatsapp_instances wi
+  WHERE
+    wi.worker_hostname = p_hostname AND
+    wi.status IN ('running', 'linking') AND
+    wi.worker_pid IS NOT NULL AND
+    (
+      -- Heartbeat is older than the threshold
+      wi.last_heartbeat < (NOW() - (p_threshold_seconds || ' seconds')::interval)
+      OR
+      -- It's supposed to be running but has no heartbeat at all
+      wi.last_heartbeat IS NULL
+    );
+$$;
+
+-- FIX: Comprehensive data function for the Superadmin dashboard
+DROP FUNCTION IF EXISTS public.get_superadmin_dashboard_data();
+CREATE OR REPLACE FUNCTION public.get_superadmin_dashboard_data()
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth AS $$
+DECLARE
+  result jsonb;
+  time_series_30d jsonb;
+BEGIN
+  IF NOT is_superadmin((SELECT auth.jwt()->>'email')) THEN
+    RAISE EXCEPTION 'Permission denied: Superadmin access required.';
+  END IF;
+
+  WITH days AS (
+    SELECT generate_series(
+      (current_date - interval '29 days')::date,
+      current_date::date,
+      '1 day'::interval
+    )::date as day
+  )
+  SELECT jsonb_build_object(
+    'user_growth', (
+      SELECT jsonb_agg(stats ORDER BY stats.date)
+      FROM (
+        SELECT d.day AS date, count(u.id) AS count
+        FROM days d LEFT JOIN auth.users u ON u.created_at::date = d.day
+        GROUP BY d.day
+      ) stats
+    ),
+    'instance_growth', (
+      SELECT jsonb_agg(stats ORDER BY stats.date)
+      FROM (
+        SELECT d.day AS date, count(wi.id) AS count
+        FROM days d LEFT JOIN public.whatsapp_instances wi ON wi.created_at::date = d.day
+        GROUP BY d.day
+      ) stats
+    ),
+    'message_volume', (
+      SELECT jsonb_agg(stats ORDER BY stats.date)
+      FROM (
+        SELECT d.day AS date, count(wm.id) AS count
+        FROM days d LEFT JOIN public.whatsapp_messages wm ON wm.timestamp::date = d.day
+        GROUP BY d.day
+      ) stats
+    )
+  ) INTO time_series_30d;
+
+  SELECT jsonb_build_object(
+    'stats', (SELECT row_to_json(t) FROM (SELECT * FROM get_system_stats()) t),
+    'user_growth', time_series_30d->'user_growth',
+    'instance_growth', time_series_30d->'instance_growth',
+    'message_volume', time_series_30d->'message_volume',
+    'revenue_overview', jsonb_build_object(
+      'mrr', (SELECT COALESCE(SUM(CASE WHEN s.billing_cycle = 'yearly' THEN p.price_yearly / 12 ELSE p.price_monthly END), 0) FROM public.subscriptions s JOIN public.plans p ON s.plan_id = p.id WHERE s.status = 'active'),
+      'new_subs_30d', (SELECT COUNT(*) FROM public.subscriptions WHERE created_at >= NOW() - interval '30 days'),
+      'churn_rate_30d', 0.5 -- Simulated
+    ),
+    'plan_distribution', (
+      SELECT COALESCE(jsonb_agg(jsonb_build_object('name', p.name, 'count', t.count)), '[]'::jsonb)
+      FROM (
+        SELECT s.plan_id, count(*) as count
+        FROM public.subscriptions s
+        WHERE s.status IN ('active', 'trialing')
+        GROUP BY s.plan_id
+      ) t JOIN public.plans p ON t.plan_id = p.id
+    ),
+    'geo_distribution', '[]'::jsonb,
+    'recent_alerts', (
+      SELECT COALESCE(jsonb_agg(a), '[]'::jsonb)
+      FROM (
+        SELECT id, created_at, alert_type, message, metadata
+        FROM public.ai_alerts
+        ORDER BY created_at DESC
+        LIMIT 5
+      ) a
+    )
+  ) INTO result;
+  
+  RETURN result;
+END;
+$$;
+
+
+-- =================================================================
+-- BILLING & SEARCH - NEW ADDITIONS
+-- =================================================================
+
+-- =========== NEW RPC FUNCTIONS ===========
+CREATE OR REPLACE FUNCTION public.get_instagram_contacts(p_instance_id uuid)
+RETURNS TABLE (
+  contact_username text,
+  tags text[],
+  last_message_text text,
+  last_message_at timestamptz,
+  unread_count bigint
+)
+LANGUAGE sql STABLE AS $$
+  -- RLS is enforced on the tables being queried.
+  WITH all_contacts_for_instance AS (
+    SELECT DISTINCT contact_username FROM public.instagram_messages WHERE instance_id = p_instance_id
+  )
+  SELECT
+    aci.contact_username,
+    COALESCE(cp.tags, ARRAY[]::text[]) AS tags,
+    lm.message_text AS last_message_text,
+    lm."timestamp" AS last_message_at,
+    COALESCE(ur.unread_count, 0) AS unread_count
+  FROM all_contacts_for_instance aci
+  LEFT JOIN public.instagram_contact_profiles cp
+    ON aci.contact_username = cp.contact_username AND cp.instance_id = p_instance_id
+  LEFT JOIN LATERAL (
+    SELECT message_text, "timestamp"
+    FROM public.instagram_messages
+    WHERE instance_id = p_instance_id AND contact_username = aci.contact_username
+    ORDER BY "timestamp" DESC
+    LIMIT 1
+  ) lm ON true
+  LEFT JOIN LATERAL (
+    SELECT COUNT(1)::bigint AS unread_count
+    FROM public.instagram_messages
+    WHERE instance_id = p_instance_id
+      AND contact_username = aci.contact_username
+      AND is_read = false
+      AND sender = 'user'
+  ) ur ON true
+  ORDER BY lm."timestamp" DESC NULLS LAST;
+$$;
+
+
+DROP FUNCTION IF EXISTS public.get_billing_dashboard_data();
+CREATE OR REPLACE FUNCTION public.get_billing_dashboard_data()
+RETURNS JSONB
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER AS $$
+DECLARE
+    result JSONB;
+    current_subscription RECORD;
+    usage_stats JSONB;
+    p_method RECORD;
+    invoice_list JSONB;
+    messages_used BIGINT;
+    accounts_used BIGINT;
+    total_contacts BIGINT;
+    user_id UUID := auth.uid();
+BEGIN
+    SELECT
+        s.plan_id,
+        CASE WHEN s.status = 'trialing' THEN p.name || ' (Free Trial)' ELSE p.name END as plan_name,
+        s.billing_cycle,
+        s.status,
+        CASE WHEN s.status = 'trialing' THEN 0 WHEN s.billing_cycle = 'monthly' THEN p.price_monthly ELSE p.price_yearly END as price,
+        s.current_period_end as renewal_date,
+        p.message_limit,
+        p.account_limit,
+        s.current_period_start
+    INTO current_subscription
+    FROM public.subscriptions s
+    JOIN public.plans p ON s.plan_id = p.id
+    WHERE s.tenant_id = user_id
+    ORDER BY s.created_at DESC
+    LIMIT 1;
+    
+    IF NOT FOUND THEN
+      RETURN NULL;
+    END IF;
+
+    SELECT count(*) INTO messages_used
+    FROM public.whatsapp_messages wm JOIN public.whatsapp_instances wi ON wm.instance_id = wi.id
+    WHERE wi.tenant_id = user_id AND wm.timestamp >= current_subscription.current_period_start;
+      
+    SELECT count(*) INTO accounts_used FROM public.whatsapp_instances WHERE tenant_id = user_id;
+    
+    SELECT count(DISTINCT contact_name) INTO total_contacts 
+    FROM public.whatsapp_messages wm JOIN public.whatsapp_instances wi ON wm.instance_id = wi.id
+    WHERE wi.tenant_id = user_id;
+      
+    usage_stats := jsonb_build_object(
+        'messages', jsonb_build_object('used', messages_used, 'limit', current_subscription.message_limit),
+        'accounts', jsonb_build_object('used', accounts_used, 'limit', current_subscription.account_limit),
+        'contacts', total_contacts,
+        'resetsOn', current_subscription.renewal_date::text
+    );
+
+    SELECT card_type, last4, expiry INTO p_method FROM public.payment_methods WHERE tenant_id = user_id LIMIT 1;
+    
+    SELECT jsonb_agg(inv) INTO invoice_list FROM (
+        SELECT id, date::text as date, amount, status
+        FROM public.invoices WHERE tenant_id = user_id ORDER BY date DESC LIMIT 5
+    ) inv;
+
+    result := jsonb_build_object(
+        'currentPlan', jsonb_build_object(
+            'planId', current_subscription.plan_id,
+            'name', current_subscription.plan_name,
+            'status', current_subscription.status,
+            'price', current_subscription.price,
+            'billingCycle', current_subscription.billing_cycle,
+            'renewalDate', current_subscription.renewal_date::text
+        ),
+        'usageStats', usage_stats,
+        'paymentMethod', CASE WHEN p_method IS NULL THEN NULL ELSE jsonb_build_object('cardType', p_method.card_type, 'last4', p_method.last4, 'expiry', p_method.expiry) END,
+        'invoices', COALESCE(invoice_list, '[]'::jsonb)
+    );
+    
+    RETURN result;
+END;
+$$;
+
+
+DROP FUNCTION IF EXISTS public.search_globally(p_query TEXT);
+CREATE OR REPLACE FUNCTION public.search_globally(p_query TEXT)
+RETURNS JSONB
+LANGUAGE sql STABLE SECURITY INVOKER AS $$
+  WITH contact_search AS (
+    SELECT
+      'contact' as type,
+      contact_name as name,
+      phone_number as details
+    FROM public.whatsapp_contacts
+    WHERE
+      instance_id IN (SELECT id FROM public.whatsapp_instances WHERE tenant_id = auth.uid())
+      AND contact_name ILIKE '%' || p_query || '%'
+    LIMIT 5
+  ),
+  workflow_search AS (
+    SELECT
+      'workflow' as type,
+      name,
+      'Trigger: ' || trigger_type as details
+    FROM public.workflows
+    WHERE
+      tenant_id = auth.uid()
+      AND name ILIKE '%' || p_query || '%'
+    LIMIT 5
+  )
+  SELECT jsonb_agg(search_results) FROM (
+    SELECT * FROM contact_search
+    UNION ALL
+    SELECT * FROM workflow_search
+  ) search_results;
+$$;
+
+CREATE OR REPLACE FUNCTION public.change_subscription_plan(p_new_plan_id UUID, p_new_billing_cycle TEXT)
+RETURNS VOID
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER AS $$
+DECLARE
+  v_tenant_id UUID := auth.uid();
+  v_current_subscription RECORD;
+  v_new_plan RECORD;
+  v_new_price INT;
+  v_new_period_end TIMESTAMPTZ;
+BEGIN
+    SELECT * INTO v_current_subscription FROM public.subscriptions WHERE tenant_id = v_tenant_id;
+    SELECT * INTO v_new_plan FROM public.plans WHERE id = p_new_plan_id;
+
+    IF NOT FOUND THEN RAISE EXCEPTION 'New plan not found.'; END IF;
+    IF v_current_subscription IS NULL THEN RAISE EXCEPTION 'No active subscription found to change.'; END IF;
+
+    v_new_price := CASE WHEN p_new_billing_cycle = 'monthly' THEN v_new_plan.price_monthly ELSE v_new_plan.price_yearly END;
+    v_new_period_end := CASE WHEN p_new_billing_cycle = 'monthly' THEN NOW() + interval '1 month' ELSE NOW() + interval '1 year' END;
+
+    UPDATE public.subscriptions
+    SET
+        plan_id = p_new_plan_id,
+        billing_cycle = p_new_billing_cycle,
+        current_period_start = NOW(),
+        current_period_end = v_new_period_end,
+        status = 'active' -- Ensure status is active when changing plan
+    WHERE tenant_id = v_tenant_id;
+    
+    INSERT INTO public.invoices (id, tenant_id, subscription_id, date, amount, status)
+    VALUES (
+        'inv_' || substr(md5(random()::text), 0, 15),
+        v_tenant_id,
+        v_current_subscription.id,
+        NOW(),
+        v_new_price,
+        'Paid'
+    );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_invoice_details(p_invoice_id TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, auth AS $$
+DECLARE
+    v_invoice_tenant_id UUID;
+    v_invoice_date TIMESTAMPTZ;
+    v_invoice_status TEXT;
+    v_invoice_subscription_id UUID;
+    v_invoice_amount INT;
+    v_user_email TEXT;
+    v_subscription_details RECORD;
+    v_invoice_line_items JSONB;
+BEGIN
+    SELECT i.tenant_id, i.date, i.status, i.subscription_id, i.amount
+    INTO v_invoice_tenant_id, v_invoice_date, v_invoice_status, v_invoice_subscription_id, v_invoice_amount
+    FROM public.invoices i
+    WHERE i.id = p_invoice_id AND i.tenant_id = auth.uid();
+    
+    IF NOT FOUND THEN RAISE EXCEPTION 'Invoice not found or permission denied.'; END IF;
+
+    SELECT s.billing_cycle, p.name as plan_name
+    INTO v_subscription_details
+    FROM public.subscriptions s
+    JOIN public.plans p on s.plan_id = p.id
+    WHERE s.id = v_invoice_subscription_id;
+
+    v_invoice_line_items := jsonb_build_array(jsonb_build_object(
+        'description', COALESCE(v_subscription_details.plan_name, 'Subscription') || ' Plan (' || COALESCE(v_subscription_details.billing_cycle, 'monthly') || ')',
+        'amount', v_invoice_amount,
+        'quantity', 1
+    ));
+
+    SELECT email INTO v_user_email FROM auth.users WHERE id = v_invoice_tenant_id;
+
+    RETURN jsonb_build_object(
+        'id', p_invoice_id,
+        'date', v_invoice_date::text,
+        'status', v_invoice_status,
+        'billTo', jsonb_build_object(
+            'name', 'Flowtiva User',
+            'email', v_user_email,
+            'address', 'Doha, Qatar'
+        ),
+        'lineItems', v_invoice_line_items,
+        'subtotal', v_invoice_amount,
+        'tax', 0,
+        'total', v_invoice_amount
+    );
+END;
+$$;
+
+-- RPC for updating payment method
+CREATE OR REPLACE FUNCTION public.update_payment_method(
+  p_card_type TEXT,
+  p_last4 TEXT,
+  p_expiry TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tenant_id UUID := auth.uid();
+BEGIN
+    INSERT INTO public.payment_methods (tenant_id, card_type, last4, expiry)
+    VALUES (v_tenant_id, p_card_type, p_last4, p_expiry)
+    ON CONFLICT (tenant_id) DO UPDATE SET
+        card_type = EXCLUDED.card_type,
+        last4 = EXCLUDED.last4,
+        expiry = EXCLUDED.expiry;
+END;
+$$;
+
+
+-- =================================================================
+-- NEW USER TRIAL TRIGGER (ROBUST FIX)
+-- =================================================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  pro_plan_id UUID;
+BEGIN
+  SET LOCAL session_replication_role = 'replica';
+
+  -- Create trial subscription
+  SELECT id INTO pro_plan_id FROM public.plans WHERE name = 'Pro' LIMIT 1;
+  IF pro_plan_id IS NOT NULL THEN
+    INSERT INTO public.subscriptions (tenant_id, plan_id, status, billing_cycle, current_period_start, current_period_end)
+    VALUES (
+      NEW.id,
+      pro_plan_id,
+      'trialing',
+      'monthly',
+      NOW(),
+      NOW() + interval '14 days'
+    );
+  END IF;
+
+  SET LOCAL session_replication_role = 'origin';
+
+  RETURN NEW;
+END;
+$$;
+
+-- Drop trigger if it exists to ensure idempotency
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+-- Create the trigger that fires after a new user is inserted into auth.users
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+
+-- =========== PERMISSIONS & REALTIME ===========
+
+-- Grant permissions to the 'authenticated' role for all public functions.
+-- RLS policies will handle the actual data security.
+GRANT EXECUTE ON FUNCTION public.get_whatsapp_contacts(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.mark_messages_read(text, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_contact_tags(UUID, TEXT, TEXT[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_contact_crm_stage(UUID, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_contact_due_date(UUID, TEXT, TIMESTAMPTZ) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_contact_priority(UUID, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.send_agent_message(UUID, TEXT, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_manual_contact(UUID, TEXT, TEXT, TEXT[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_outreach_campaigns() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_outreach_campaign(UUID, TEXT, TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_superadmin(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_system_stats() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_superadmin_dashboard_data() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_all_users() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_all_instances() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_dashboard_stats() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_recent_activity() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.force_stop_instance(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_system_logs(INT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_billing_dashboard_data() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.search_globally(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.change_subscription_plan(UUID, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_invoice_details(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_payment_method(TEXT, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.increment_ai_usage(UUID, INT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_ai_usage(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.log_ai_alert(TEXT, TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_instagram_contacts(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_ai_telemetry_stats() TO authenticated;
+
+
+-- Grant execute on new RPCs to service_role (for backend worker)
+GRANT EXECUTE ON FUNCTION public.claim_next_command(TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.claim_instance(UUID, TEXT, INT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_pending_outreach_contact(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.log_message(UUID, TEXT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_zombie_instances(TEXT, INT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.purge_old_telemetry() TO service_role;
+
+-- Add all relevant tables to the realtime publication idempotently.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'whatsapp_instances') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.whatsapp_instances; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'whatsapp_linking_codes') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.whatsapp_linking_codes; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'whatsapp_messages') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.whatsapp_messages; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'whatsapp_contact_profiles') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.whatsapp_contact_profiles; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'whatsapp_contacts') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.whatsapp_contacts; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'outreach_campaigns') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.outreach_campaigns; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'outreach_contacts') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.outreach_contacts; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'instance_logs') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.instance_logs; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'instance_commands') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.instance_commands; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'workflows') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.workflows; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'workflow_actions') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.workflow_actions; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'workflow_history') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.workflow_history; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'plans') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.plans; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'subscriptions') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.subscriptions; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'payment_methods') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.payment_methods; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'invoices') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.invoices; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_telemetry') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_telemetry; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_alerts') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_alerts; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_reports') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_reports; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_usage') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_usage; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'ai_tool_calls') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_tool_calls; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'instagram_instances') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.instagram_instances; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'instagram_messages') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.instagram_messages; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'instagram_contact_profiles') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.instagram_contact_profiles; END IF;
+END $$;
+
+-- =================================================================
+-- SCHEMA CACHE REFRESH
+-- =================================================================
+-- Notify PostgREST to reload the schema cache. This is crucial after making
+-- schema changes to ensure the API reflects the new tables and functions immediately.
+NOTIFY pgrst, 'reload schema';
+
+-- =================================================================
+-- END OF SCRIPT
+-- =================================================================

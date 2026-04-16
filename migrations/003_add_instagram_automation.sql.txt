@@ -1,0 +1,146 @@
+
+-- =================================================================
+-- MIGRATION SCRIPT: ADD INSTAGRAM DM AUTOMATION
+-- =================================================================
+-- This script adds the necessary tables, policies, and functions
+-- for managing Instagram DM automation instances. It is designed to
+-- be run once on an existing database.
+
+-- =========== INSTAGRAM TABLE DEFINITIONS ===========
+
+-- Stores the main Instagram instances/accounts connected by users.
+CREATE TABLE IF NOT EXISTS public.instagram_instances (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+  username TEXT NOT NULL,
+  password TEXT NOT NULL, -- NOTE: In a real production app, this should be encrypted.
+  custom_prompt TEXT NOT NULL,
+  context TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'linking', 'running', 'inactive', 'failed')),
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  last_error TEXT,
+  worker_hostname TEXT,
+  worker_pid INTEGER,
+  last_heartbeat TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_instagram_instances_tenant ON public.instagram_instances (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_insta_instances_for_orchestrator ON public.instagram_instances (is_active, status, last_heartbeat);
+
+
+-- Stores all Instagram DM messages.
+CREATE TABLE IF NOT EXISTS public.instagram_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instance_id UUID NOT NULL REFERENCES public.instagram_instances(id) ON DELETE CASCADE,
+  contact_username TEXT NOT NULL,
+  sender TEXT NOT NULL CHECK (sender IN ('user', 'ai', 'agent')),
+  message_text TEXT,
+  image_url TEXT,
+  is_read BOOLEAN DEFAULT FALSE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'sending', 'sent', 'failed', 'read')),
+  "timestamp" TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_instagram_messages_instance_contact ON public.instagram_messages (instance_id, contact_username, "timestamp" DESC);
+
+
+-- Stores additional CRM-like data for Instagram contacts.
+CREATE TABLE IF NOT EXISTS public.instagram_contact_profiles (
+  instance_id UUID NOT NULL REFERENCES public.instagram_instances(id) ON DELETE CASCADE,
+  contact_username TEXT NOT NULL,
+  tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  -- You can add more CRM fields here later if needed
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  PRIMARY KEY (instance_id, contact_username)
+);
+CREATE INDEX IF NOT EXISTS idx_instagram_contact_profiles_instance_id ON public.instagram_contact_profiles (instance_id);
+
+
+-- =========== ROW LEVEL SECURITY (RLS) FOR INSTAGRAM ===========
+
+ALTER TABLE public.instagram_instances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.instagram_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.instagram_contact_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can only manage their own Instagram instances.
+DROP POLICY IF EXISTS "Enable all access for users based on tenant_id" ON public.instagram_instances;
+CREATE POLICY "Enable all access for users based on tenant_id" ON public.instagram_instances
+  FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+
+-- Policy: Users can only access messages for Instagram instances they own.
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.instagram_messages;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.instagram_messages
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.instagram_instances ii
+    WHERE ii.id = instagram_messages.instance_id AND ii.tenant_id = auth.uid()
+  ));
+
+-- Policy: Users can only access contact profiles for Instagram instances they own.
+DROP POLICY IF EXISTS "Enable all access for users based on instance ownership" ON public.instagram_contact_profiles;
+CREATE POLICY "Enable all access for users based on instance ownership" ON public.instagram_contact_profiles
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.instagram_instances ii
+    WHERE ii.id = instagram_contact_profiles.instance_id AND ii.tenant_id = auth.uid()
+  ));
+
+
+-- =========== NEW RPC FUNCTIONS FOR INSTAGRAM ===========
+
+-- Get a list of Instagram contacts for an instance, including last message details.
+CREATE OR REPLACE FUNCTION public.get_instagram_contacts(p_instance_id uuid)
+RETURNS TABLE (
+  contact_username text,
+  tags text[],
+  last_message_text text,
+  last_message_at timestamptz,
+  unread_count bigint
+)
+LANGUAGE sql STABLE AS $$
+  -- RLS is enforced on the tables being queried.
+  WITH all_contacts_for_instance AS (
+    SELECT DISTINCT contact_username FROM public.instagram_messages WHERE instance_id = p_instance_id
+  )
+  SELECT
+    aci.contact_username,
+    COALESCE(cp.tags, ARRAY[]::text[]) AS tags,
+    lm.message_text AS last_message_text,
+    lm."timestamp" AS last_message_at,
+    COALESCE(ur.unread_count, 0) AS unread_count
+  FROM all_contacts_for_instance aci
+  LEFT JOIN public.instagram_contact_profiles cp
+    ON aci.contact_username = cp.contact_username AND cp.instance_id = p_instance_id
+  LEFT JOIN LATERAL (
+    SELECT message_text, "timestamp"
+    FROM public.instagram_messages
+    WHERE instance_id = p_instance_id AND contact_username = aci.contact_username
+    ORDER BY "timestamp" DESC
+    LIMIT 1
+  ) lm ON true
+  LEFT JOIN LATERAL (
+    SELECT COUNT(1)::bigint AS unread_count
+    FROM public.instagram_messages
+    WHERE instance_id = p_instance_id
+      AND contact_username = aci.contact_username
+      AND is_read = false
+      AND sender = 'user'
+  ) ur ON true
+  ORDER BY lm."timestamp" DESC NULLS LAST;
+$$;
+
+
+-- =========== REALTIME & GRANTS ===========
+
+-- Add tables to realtime publication
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'instagram_instances') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.instagram_instances; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'instagram_messages') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.instagram_messages; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'instagram_contact_profiles') THEN ALTER PUBLICATION supabase_realtime ADD TABLE public.instagram_contact_profiles; END IF;
+END $$;
+
+-- Grant permissions
+GRANT EXECUTE ON FUNCTION public.get_instagram_contacts(uuid) TO authenticated;
+
+-- Notify PostgREST to reload the schema.
+NOTIFY pgrst, 'reload schema';

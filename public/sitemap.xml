@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://flowtiva.vercel.app/</loc>
+    <lastmod>2024-08-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link 
+               rel="alternate"
+               hreflang="en-qa"
+               href="https://flowtiva.vercel.app/"/>
+    <xhtml:link 
+               rel="alternate"
+               hreflang="ar-qa"
+               href="https://flowtiva.vercel.app/ar/"/>
+  </url>
+  <url>
+    <loc>https://flowtiva.vercel.app/ar/</loc>
+    <lastmod>2024-08-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link 
+               rel="alternate"
+               hreflang="en-qa"
+               href="https://flowtiva.vercel.app/"/>
+    <xhtml:link 
+               rel="alternate"
+               hreflang="ar-qa"
+               href="https://flowtiva.vercel.app/ar/"/>
+  </url>
+</urlset>

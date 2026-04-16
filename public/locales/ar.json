@@ -1,0 +1,849 @@
+{
+  "_comment": "Arabic Localization for Flowtiva. Full coverage.",
+  "app": {
+    "errors": {
+      "loadHubData": "فشل تحميل بيانات النظام.",
+      "findInstance": "لم يتم العثور على الحساب لجهة الاتصال هذه.",
+      "generic": "خطأ في النظام: {{error}}"
+    },
+    "notifications": {
+      "sentImage": "أرسل ملف وسائط"
+    },
+    "toasts": {
+      "toggleCommand": "تم إرسال الأمر: {{status}} للرقم +{{phoneNumber}}.",
+      "start": "تفعيل",
+      "stop": "إلغاء تفعيل",
+      "settingsSaved": "تم تحديث التكوين بنجاح.",
+      "deleteSuccess": "تم حذف الحساب +{{phoneNumber}} نهائيًا.",
+      "connectSuccess": "تم إنشاء الاتصال مع +{{phoneNumber}}.",
+      "moveError": "فشل تحديث مرحلة جهة الاتصال.",
+      "dueDateError": "فشل تعيين تاريخ الاستحقاق.",
+      "priorityError": "فشل تحديث الأولوية."
+    }
+  },
+  "common": {
+    "active": "نشط",
+    "view": "عرض",
+    "settings": "إعدادات",
+    "delete": "إزالة",
+    "confirm": "تأكيد",
+    "cancel": "إلغاء",
+    "close": "إغلاق",
+    "loading": "جارٍ المعالجة...",
+    "saving": "جارٍ الحفظ...",
+    "connecting": "جارٍ الاتصال...",
+    "error": "خطأ",
+    "errorWithMessage": "خطأ في النظام: {{message}}",
+    "notAvailable": "غير متاح",
+    "tryAgain": "حاول مرة أخرى",
+    "downloading": "جارٍ التنزيل...",
+    "downloadPdf": "تصدير PDF",
+    "yesterday": "الأمس",
+    "save": "حفظ التغييرات",
+    "back": "رجوع",
+    "theme": "المظهر",
+    "language": "اللغة",
+    "admin": "المسؤول"
+  },
+  "time": {
+    "justNow": "الآن",
+    "secondsAgo": "منذ {{count}} ث",
+    "minutesAgo": "منذ {{count}} د",
+    "hoursAgo": "منذ {{count}} س",
+    "daysAgo": "منذ {{count}} ي",
+    "monthsAgo": "منذ {{count}} ش",
+    "yearsAgo": "منذ {{count}} س",
+    "today": "اليوم",
+    "tomorrow": "غداً",
+    "overdue": "متأخر {{count}} أيام",
+    "inDays": "خلال {{count}} أيام"
+  },
+  "header": {
+    "toggleTheme": "تبديل المظهر",
+    "searchPlaceholder": "بحث في النظام...",
+    "openMenu": "القائمة",
+    "searching": "جارٍ البحث...",
+    "contacts": "جهات الاتصال",
+    "noResults": "لا توجد نتائج لـ \"{{query}}\""
+  },
+  "homepage": {
+    "nav": {
+      "solution": "المنصة",
+      "testimonials": "العملاء",
+      "pricing": "الأسعار",
+      "faq": "الأسئلة الشائعة",
+      "signIn": "دخول",
+      "getStarted": "ابدأ الآن"
+    },
+    "hero": {
+      "title": "محرك الذكاء",
+      "subtitle": "للأعمال الحديثة.",
+      "description": "توحد Nexus واتساب، انستغرام، وإدارة علاقات العملاء في نظام عصبي مستقل واحد لشركتك.",
+      "trialCta": "انشر الآن",
+      "salesCta": "تواصل مع المبيعات",
+      "emailPlaceholder": "work@company.com",
+      "formMicrocopy": "تجربة لمدة 14 يومًا. أمان مؤسسي. بدون بطاقة ائتمان."
+    },
+    "demo": {
+        "chat": {
+            "u1": "مرحبًا، أنا مهتم بفيلا لوسيل.",
+            "a1": "أهلاً بك. العقار المكون من 3 غرف نوم متاح. هل تبحث عن شراء أم استئجار؟",
+            "u2": "شراء.",
+            "a2": "عُلم. قمت بتحديث ملفك ونقلك إلى قائمة 'المؤهلين'.",
+            "u3": "هل هناك حوافز نقدية؟",
+            "a3": "سؤال ممتاز. سأقوم بتنبيه وكيل أول لمناقشة التفاصيل المالية معك فوراً.",
+            "agentActive": "نظام Nexus نشط",
+            "typeReply": "اعتراض المحادثة..."
+        },
+        "workflow": {
+            "title": "المنطق: استحواذ عميل جديد",
+            "trigger": "المشغل: رسالة واردة",
+            "action1": "إجراء: التحقق من النية",
+            "action2": "النظام: وسم 'استحواذ'",
+            "action3": "CRM: تحديث المرحلة",
+            "action4": "تنبيه: فريق المبيعات",
+            "tooltip1": "تصور المنطق باستخدام منشئ سير العمل Nexus.",
+            "tooltip2": "تنفيذ تلقائي بناءً على نية اللغة الطبيعية.",
+            "tooltip3": "تحديثات CRM بدون تأخير.",
+            "tooltip4": "بروتوكول تسليم بشري سلس."
+        }
+    },
+    "socialProof": {
+      "trustedBy": "مدعوم من قبل شركات الجيل القادم",
+      "security": "هندسة متوافقة مع SOC2 • تشفير من الطرف إلى الطرف"
+    },
+    "pricing": {
+      "lossAversionTitle": "التقاط كل فرصة",
+      "lossAversionDescription": "التأخير يقتل الصفقات. تضمن Nexus وقت استجابة صفري، 24/7/365.",
+      "urgencyBanner": "وصول ذو أولوية: احصل على خصم 20% للالتزامات السنوية.",
+      "mostPopular": "مفضل",
+      "month": "شهر",
+      "year": "سنة",
+      "savePercent": "وفر {percent}%",
+      "ctaStarter": "ابدأ البناء",
+      "ctaPro": "ابدأ تجربة Pro",
+      "ctaBusiness": "تواصل مع المبيعات",
+      "socialProofTicker": [
+        "نشر جديد في قطاع عقارات لوسيل.",
+        "تم تفعيل حساب تجزئة مؤسسي.",
+        "مجموعة سيارات خفضت وقت الاستجابة بنسبة 90%.",
+        "15 وكيل نشط جديد تم نشرهم هذا الساعة."
+      ],
+      "plans": {
+          "starter": {
+              "description": "بنية تحتية أساسية للمشغلين المنفردين.",
+              "subheader": "الميزات الأساسية",
+              "f1": "عقدة واتساب واحدة",
+              "f2": "2,000 عملية ذكاء اصطناعي/شهر",
+              "f3": "التقاط عملاء أساسي",
+              "f4": "لوحة تحكم حية",
+              "f5": "دعم قياسي"
+          },
+          "pro": {
+              "description": "مجموعة أدوات متقدمة لتوسيع الفرق.",
+              "subheader": "مجموعة النمو",
+              "f1": "5 عقد واتساب",
+              "f2": "10,000 عملية ذكاء اصطناعي/شهر",
+              "f3": "منطق تأهيل متقدم",
+              "f4": "بروتوكول التسليم البشري",
+              "f5": "معايرة الشخصية",
+              "f6": "دعم ذو أولوية"
+          },
+          "business": {
+              "description": "حل كامل للمؤسسات ذات الحجم الكبير.",
+              "subheader": "درجة المؤسسات",
+              "f1": "15+ عقدة واتساب",
+              "f2": "30,000+ عملية ذكاء اصطناعي/شهر",
+              "f3": "منطق سير عمل مخصص",
+              "f4": "وصول API",
+              "f5": "مدير نجاح مخصص",
+              "f6": "ضمانات مستوى الخدمة (SLA)"
+          }
+      }
+    }
+  },
+  "dashboard": {
+    "header": {
+      "hub": "مركز القيادة",
+      "pipeline": "المسار",
+      "contacts": "الدليل",
+      "instagram": "انستغرام",
+      "billing": "الاشتراك",
+      "workflows": "تدفقات المنطق",
+      "outreach": "الحملات",
+      "ai_metrics": "مقاييس الذكاء",
+      "administrator": "مسؤول",
+      "signedInAs": "مستخدم",
+      "signOut": "إنهاء الجلسة",
+      "signOutSuccess": "تم إنهاء الجلسة."
+    },
+    "sidebar": {
+      "hub": "القيادة",
+      "pipeline": "المسار",
+      "contacts": "الدليل",
+      "instagram": "انستغرام",
+      "outreach": "التواصل",
+      "workflows": "المنطق",
+      "billing": "الفوترة",
+      "ai_metrics": "المقاييس"
+    }
+  },
+  "hub": {
+    "instanceManagement": {
+      "title": "العقد",
+      "description": "نقاط اتصال نشطة."
+    },
+    "buttons": {
+      "connectNew": "إضافة عقدة",
+      "connectFirst": "تهيئة العقدة الأولى"
+    },
+    "emptyState": {
+      "noAccounts": "لم يتم اكتشاف عقد نشطة."
+    },
+    "actionItems": {
+      "title": "تنبيهات النظام",
+      "newLeads": "استحواذات جديدة",
+      "newLeadsDesc": "بانتظار مراجعة المسار.",
+      "failedInstances": "فشل العقد",
+      "failedInstancesDesc": "يتطلب تدخلاً فورياً."
+    },
+    "instanceCard": {
+      "status": {
+        "pending": "معلق",
+        "linking": "مصافحة",
+        "running": "تشغيلي",
+        "inactive": "استعداد",
+        "failed": "خطأ نظام"
+      },
+      "tooltips": {
+        "pending": "جارٍ تهيئة عملية العامل...",
+        "linking": "بروتوكول المصافحة نشط. بانتظار ربط الجهاز.",
+        "running": "تشغيلي. جارٍ معالجة تدفقات البيانات.",
+        "inactive": "وضع الاستعداد. معالجة الإشارات متوقفة مؤقتًا.",
+        "failed": "خطأ في النظام. تحقق من التشخيصات.",
+        "healthy": "مثالي",
+        "unresponsive": "زمن انتقال مرتفع"
+      },
+      "buttons": {
+        "viewChats": "وحدة التحكم",
+        "continueLinking": "استئناف الربط",
+        "viewErrorLogs": "التشخيصات"
+      },
+      "health": {
+        "runningOn": "المضيف: {hostname} (PID: {pid})"
+      },
+      "menu": {
+        "settings": "تكوين",
+        "viewLogs": "الطرفية",
+        "delete": "إخراج من الخدمة"
+      }
+    },
+    "healthCard": {
+      "title": "صحة نظام الذكاء الاصطناعي",
+      "statusLabel": "الحالة:",
+      "lastChecked": "آخر فحص",
+      "uptime": "وقت التشغيل",
+      "refresh": "تحديث",
+      "states": {
+        "normal": "طبيعي",
+        "degraded": "متدهور",
+        "error": "حرج",
+        "unknown": "مجهول"
+      }
+    },
+    "insights": {
+      "title": "مساعد الذكاء الاصطناعي",
+      "default": "مرحبًا بك في لوحة القيادة الخاصة بك!"
+    },
+    "upcomingTasks": {
+      "title": "المهام القادمة",
+      "empty": "لا توجد مهام قادمة أو متأخرة."
+    },
+    "pipelineDistribution": {
+        "title": "توزيع المسار"
+    },
+    "recentActivity": {
+        "title": "النشاط الأخير",
+        "empty": "لا توجد رسائل واردة حديثة."
+    }
+  },
+  "whatsapp": {
+    "title": "العقد النشطة",
+    "description": "حدد عقدة لفحص حركة المرور.",
+    "connectNew": "عقدة جديدة",
+    "notifications": {
+      "title": "إشعارات النظام",
+      "description": "تمكين تنبيهات سطح المكتب للمراقبة في الوقت الفعلي.",
+      "button": "تمكين",
+      "successToast": "الإشعارات نشطة.",
+      "infoToast": "تم رفض الإذن."
+    },
+    "contactList": {
+      "title": "تدفق البيانات",
+      "forNumber": "نقطة النهاية: +974{{phoneNumber}}",
+      "search": "تصفية التدفق...",
+      "filterByTag": "تصفية: وسم",
+      "filterByPriority": "تصفية: أولوية",
+      "noTags": "لم يتم تعريف وسوم.",
+      "clearFilters": "إعادة تعيين",
+      "noConversations": "التدفق فارغ.",
+      "noContactsFound": "لا توجد كيانات مطابقة.",
+      "allPriorities": "كل المستويات"
+    },
+    "messagePane": {
+      "beginning": "بداية الاحتفاظ",
+      "loadingMore": "جلب الأرشيف...",
+      "loadMoreError": "فشل استرجاع الأرشيف.",
+      "writeMessage": "إدخال أمر...",
+      "attachFile": "رفع أصل",
+      "sendMessage": "إرسال",
+      "fileTooLarge": "الأصل يتجاوز حد {{size}} ميغابايت.",
+      "invalidFileType": "تنسيق ملف غير مدعوم.",
+      "online": "متصل"
+    },
+    "contactDetails": {
+        "title": "تفاصيل الاتصال",
+        "about": "حول",
+        "tags": "الوسوم",
+        "crm": "تفاصيل CRM",
+        "stage": "المرحلة",
+        "priority": "الأولوية",
+        "dueDate": "تاريخ الاستحقاق",
+        "clearDate": "مسح"
+    },
+    "tagEditor": {
+      "noTags": "بدون وسوم",
+      "edit": "تعديل",
+      "cancel": "إلغاء",
+      "addPlaceholder": "وسم جديد...",
+      "save": "حفظ",
+      "successToast": "تم حفظ الوسوم.",
+      "errorToast": "فشل حفظ الوسوم: {{error}}"
+    },
+    "connectModal": {
+        "step1": {
+            "title": "ربط حساب جديد",
+            "description": "كيف ستستخدم وكيل الذكاء الاصطناعي هذا؟",
+            "businessTitle": "لأعمالي التجارية",
+            "businessDesc": "إدارة العملاء المحتملين، الدعم، وأتمتة المبيعات.",
+            "personalTitle": "للاستخدام الشخصي",
+            "personalDesc": "مساعد شخصي، شخصية إبداعية، أو روبوت خبير."
+        },
+        "step2": {
+            "businessTitle": "ربط حساب تجاري",
+            "personalTitle": "ربط حساب شخصي",
+            "description": "أدخل رقم الهاتف وقدم التفاصيل لإنشاء موجه الذكاء الاصطناعي.",
+            "phoneLabel": "1. رقم الهاتف",
+            "phonePlaceholder": "مثال: 55123456 (بدون رمز الدولة)",
+            "aiLabel": "2. تفاصيل وكيل الذكاء الاصطناعي",
+            "generating": "جارٍ التوليد...",
+            "generateCode": "توليد رمز الربط"
+        },
+        "step3": {
+            "successTitle": "تم ربط الحساب بنجاح!",
+            "successDesc": "حسابك للرقم +974{{phoneNumber}} متصل ويعمل الآن.",
+            "linkTitle": "اربط حساب واتساب الخاص بك",
+            "linkDesc": "رابط آمن للرقم +974{{phoneNumber}}",
+            "codeLabel": "أدخل هذا الرمز على هاتفك:",
+            "instructions": "اذهب إلى واتساب > الإعدادات > الأجهزة المرتبطة > ربط جهاز > الربط باستخدام رقم الهاتف.",
+            "loadingStatus": "جارٍ تهيئة عملية الربط..."
+        },
+        "buttons": {
+            "cancel": "إلغاء",
+            "back": "رجوع",
+            "close": "إغلاق",
+            "done": "تم",
+            "viewChats": "عرض المحادثات"
+        }
+    },
+    "promptGenerator": {
+        "description": "املأ التفاصيل أدناه لإنشاء موجه مخصص لوكيل {{useCase}} الخاص بك.",
+        "business": {
+            "nameLabel": "اسم العمل",
+            "namePlaceholder": "مثال: عقارات الدوحة",
+            "typeLabel": "نوع العمل / الصناعة",
+            "typePlaceholder": "مثال: عقارات، معرض سيارات، مطعم",
+            "servicesLabel": "المنتجات / الخدمات",
+            "servicesPlaceholder": "قائمة خدماتك مع التفاصيل الرئيسية. كن دقيقاً! مثال: فيلا 3 غرف في لوسيل، 15,000 ريال/شهر",
+            "servicesHelp": "كلما زادت التفاصيل، أصبح الذكاء الاصطناعي أذكى."
+        },
+        "personal": {
+            "nameLabel": "اسم المساعد",
+            "namePlaceholder": "مثال: جارفيس",
+            "personalityLabel": "الشخصية / الغرض",
+            "personalityPlaceholder": "مثال: خبير تريفيا ذكي",
+            "knowledgeLabel": "قاعدة المعرفة / السلوك",
+            "knowledgePlaceholder": "صف ما يجب أن يعرفه، مثال: 'يعرف كل شيء عن تاريخ الحرب العالمية الثانية.'"
+        },
+        "instructionsLabel": "تعليمات خاصة (اختياري)",
+        "instructionsPlaceholder": "مثال: أنهِ دائماً بسؤال، كن رسمياً جداً",
+        "instructionsHelp": "حدد شخصية الذكاء الاصطناعي. هل يجب أن يكون رسمياً أم ودوداً؟",
+        "generateButton": "توليد الموجه",
+        "generating": "جارٍ التوليد..."
+    },
+    "relinkingModal": {
+      "title": "المصافحة جارية",
+      "description": "استكمال المصادقة لـ +{{phoneNumber}}.",
+      "fetchingStatus": "جارٍ استطلاع الحالة...",
+      "expiredTitle": "انتهت صلاحية الرمز",
+      "expiredDesc": "مهلة الأمان. الرمز غير صالح.",
+      "expiresIn": "TTL: {{time}}",
+      "deleteAttempt": "إحباط"
+    },
+    "deleteModal": {
+      "title": "إخراج العقدة من الخدمة",
+      "description": "تأكيد الحذف للعقدة {{phoneNumber}}. فقدان البيانات دائم.",
+      "confirm": "تنفيذ"
+    },
+    "settingsModal": {
+      "title": "تكوين العقدة: +{{phoneNumber}}",
+      "description": "تعديل معلمات سلوك الذكاء الاصطناعي.",
+      "promptLabel": "تعليمات النظام (الموجه)",
+      "promptDesc": "المنطق الأساسي الذي يحكم سلوك الوكيل.",
+      "save": "حفظ التغييرات",
+      "saving": "جارٍ الحفظ...",
+      "successToast": "تم تحديث التكوين.",
+      "errorToast": "فشل التحديث.",
+      "context": {
+        "label": "قاعدة المعرفة",
+        "help": "سياق ثابت لمحرك الاستدلال.",
+        "placeholder": "ساعات العمل، بيانات السياسة، إلخ."
+      },
+      "tools": {
+        "title": "القدرات",
+        "help": "الإجراءات المصرح بها.",
+        "update_crm_stage": {
+          "label": "إدارة المسار",
+          "description": "نقل الكيانات عبر المراحل."
+        },
+        "add_tag": {
+          "label": "الوسم",
+          "description": "تطبيق وسوم التصنيف."
+        },
+        "set_due_date": {
+          "label": "الجدولة",
+          "description": "تعيين المشغلات الزمنية."
+        },
+        "update_priority": {
+          "label": "تحديد الأولويات",
+          "description": "تعديل أولوية الكيان."
+        }
+      },
+      "errors": {
+        "schemaUpdate": "عدم تطابق المخطط. الترحيل مطلوب.",
+        "saveFailed": "فشل الحفظ."
+      }
+    },
+    "tagSuggestions": {
+      "title": "تصنيف الذكاء الاصطناعي",
+      "save": "قبول {{count}} وسم (وسوم)",
+      "dismiss": "تجاهل"
+    },
+    "selectInstance": "اختر عقدة",
+    "selectInstanceDesc": "اختر عقدة نشطة لعرض حركة المرور."
+  },
+  "crm": {
+    "stages": {
+      "new": "جديد",
+      "contacted": "تم الاتصال",
+      "proposal": "عرض",
+      "won": "مغلقة (فوز)",
+      "lost": "مغلقة (خسارة)"
+    },
+    "title": "المسار",
+    "description": "إدارة دورة حياة الكيان.",
+    "noActiveAccount": "غير متصل",
+    "noActiveAccountDesc": "اربط عقدة لعرض بيانات المسار.",
+    "search": "استعلام المسار...",
+    "sortByActivity": "فرز: نشاط",
+    "sortByName": "فرز: أبجدي",
+    "stats": {
+      "total": "إجمالي الكيانات",
+      "conversion": "معدل التحويل",
+      "responseTime": "زمن الانتقال",
+      "newThisWeek": "جديد (7 أيام)"
+    },
+    "chartTitle": "التوزيع",
+    "kanbanCard": {
+      "menu": {
+        "moveTo": "انتقال إلى...",
+        "setPriority": "تعيين الأولوية",
+        "setDueDate": "تعيين الموعد النهائي"
+      },
+      "datePicker": {
+        "title": "التاريخ المستهدف",
+        "clear": "مسح"
+      },
+      "noMessages": "لا توجد بيانات.",
+      "noDueDate": "لا هدف",
+      "clearDateModal": {
+        "title": "مسح الموعد النهائي",
+        "description": "إزالة التاريخ المستهدف لهذا الكيان؟",
+        "confirm": "تأكيد"
+      }
+    },
+    "kanbanColumn": {
+      "dragHelp": "اسحب الكيانات لتحديث الحالة."
+    },
+    "pipelineChart": {
+      "title": "الحجم",
+      "noData": "لا توجد بيانات.",
+      "tooltip": {
+        "contacts": "كيانات"
+      }
+    }
+  },
+  "billing": {
+    "manageTitle": "إدارة الاشتراك",
+    "currentPlan": "الخطة النشطة",
+    "cancelSubscription": "إلغاء",
+    "renewOn": "تجديد: {{date}}.",
+    "paymentMethod": "طريقة الدفع",
+    "expires": "انتهاء: {{date}}",
+    "updatePayment": "تحديث",
+    "invoiceHistory": "الفواتير",
+    "invoiceHistoryDesc": "سجلات المعاملات.",
+    "invoiceDate": "التاريخ",
+    "invoiceAmount": "الإجمالي",
+    "invoiceStatus": "الحالة",
+    "invoiceAction": "إجراء",
+    "download": "تصدير",
+    "changePlanTitle": "ترقية البنية التحتية",
+    "changePlanDesc": "حدد مستوى السعة لمتطلباتك.",
+    "monthly": "شهري",
+    "yearly": "سنوي",
+    "saveYearly": "شهران مجاناً",
+    "currentPlanButton": "نشط",
+    "choosePlanButton": "تحديد",
+    "faqTitle": "الأسئلة الشائعة حول الاشتراك",
+    "errors": {
+      "loadFailed": "فشل استرجاع البيانات.",
+      "invoiceNotFound": "بيانات الفاتورة مفقودة."
+    },
+    "inactive": {
+      "title": "الاشتراك غير نشط",
+      "description": "تم تعليق الخدمة. يرجى تحديث طريقة الدفع."
+    },
+    "noSubscription": {
+      "title": "لا يوجد اشتراك نشط",
+      "description": "حدد مستوى لتهيئة الخدمة."
+    },
+    "trial": {
+      "title": "تجربة نشطة: {{planName}}",
+      "description": "تنتهي في {{date}}. قم بالترقية للاحتفاظ بالوصول."
+    },
+    "usage": {
+      "title": "استخدام السعة",
+      "description": "استخدام الدورة. إعادة تعيين {{date}}.",
+      "messages": "عمليات الذكاء الاصطناعي",
+      "accounts": "العقد",
+      "contacts": "الكيانات",
+      "messagesUnit": "عملية",
+      "accountsUnit": "عقد",
+      "limitExceeded": "تجاوز السعة",
+      "approachingLimit": "السعة منخفضة"
+    },
+    "toasts": {
+      "planChanged": "تم الترحيل إلى مستوى {{planName}}."
+    },
+    "modals": {
+      "confirmChange": {
+        "title": "تأكيد الترحيل",
+        "description": "التحويل إلى {{planName}} ({{cycle}})؟ يتم تعديل الفوترة فوراً.",
+        "confirming": "جارٍ المعالجة..."
+      }
+    },
+    "plans": {
+      "mostPopular": "الأكثر طلباً",
+      "starter": {
+          "description": "للأفراد ورواد الأعمال المستقلين لتجربة الخدمة.",
+          "subheader": "الأساسيات للبدء مع دردشة الذكاء الاصطناعي.",
+          "f1": "ربط حساب واتساب واحد",
+          "f2": "2,000 رسالة ذكاء اصطناعي/شهر",
+          "f3": "التقاط العملاء المحتملين بالذكاء الاصطناعي",
+          "f4": "لوحة تحكم الدردشة الحية",
+          "f5": "دعم عبر البريد الإلكتروني القياسي"
+      },
+      "pro": {
+          "description": "للشركات النامية المستعدة للأتمتة والتوسع.",
+          "subheader": "أتمتة قوية ودعم متعدد الوكلاء.",
+          "f1": "ربط حتى 5 حسابات واتساب",
+          "f2": "10,000 رسالة ذكاء اصطناعي/شهر",
+          "f3": "تأهيل العملاء المحتملين تلقائياً",
+          "f4": "تسليم سلس من الذكاء الاصطناعي للبشر",
+          "f5": "تخصيص شخصية الذكاء الاصطناعي",
+          "f6": "أولوية الدعم عبر البريد الإلكتروني والدردشة"
+      },
+      "business": {
+          "description": "للفرق الراسخة والوكالات التي تدير عملاء متعددين.",
+          "subheader": "توسيع العمليات بأدوات ودعم متقدم.",
+          "f1": "ربط حتى 15 حساب واتساب",
+          "f2": "30,000 رسالة ذكاء اصطناعي/شهر",
+          "f3": "فتح جميع ميزات Pro",
+          "f4": "أتمتة سير عمل متقدمة",
+          "f5": "مدير نجاح مخصص",
+          "f6": "الوصول لواجهة برمجة التطبيقات (قريباً)"
+      }
+    },
+    "faq": {
+      "q1": "هل يمكنني توسيع خطتي؟",
+      "a1": "نعم. يمكن تعديل السعة فوراً من لوحة القيادة هذه.",
+      "q2": "تعريف عملية الذكاء الاصطناعي؟",
+      "a2": "أي استدلال أو استجابة آلية يتم إنشاؤها بواسطة نواة Nexus.",
+      "q3": "شروط التجربة؟",
+      "a3": "وصول كامل لمدة 14 يوماً إلى ميزات Pro. لا التزام.",
+      "q4": "سياسة التجاوز؟",
+      "a4": "تتوقف الخدمة مؤقتاً عند الوصول إلى حدود السعة. قم بالترقية للحصول على خدمة متواصلة."
+    },
+    "paymentSuccess": "تم تأكيد الدفع! الفاتورة #{{id}}",
+    "subscriptionUpdated": "تم تحديث الاشتراك بنجاح!",
+    "paymentFailed": "فشل الدفع أو تم إلغاؤه.",
+    "verifying": "جارٍ التحقق من الدفع...",
+    "noPaymentMethod": "لا توجد طريقة دفع مسجلة."
+  },
+  "workflows": {
+    "title": "تدفقات المنطق",
+    "description": "منشئ الأتمتة المرئي.",
+    "create": "تدفق منطق جديد",
+    "noWorkflows": "لا يوجد منطق محدد",
+    "noWorkflowsDesc": "ابدأ تسلسل أتمتة جديد.",
+    "deleteTitle": "حذف المنطق",
+    "deleteDesc": "حذف \"{{name}}\"؟ لا يمكن التراجع.",
+    "deleteConfirm": "حذف",
+    "successDelete": "تم حذف المنطق \"{{name}}\".",
+    "errorDelete": "فشل الحذف: {{error}}",
+    "infoStatus": "المنطق \"{{name}}\": {{status}}.",
+    "errorStatus": "فشل تحديث الحالة: {{error}}",
+    "edit": "تكوين",
+    "trigger": "المُدخل",
+    "viewHistory": "السجلات",
+    "historyTitle": "سجلات التنفيذ",
+    "historyDescription": "سجل المراجعة لأحداث الأتمتة.",
+    "run": "تنفيذ",
+    "triggeredAt": "الطابع الزمني",
+    "noHistory": "السجل فارغ",
+    "noHistoryDesc": "لم يتم تسجيل أي أحداث تنفيذ.",
+    "runDetails": "القياس عن بعد",
+    "actionLog": "تتبع",
+    "searchPlaceholder": "البحث في التدفقات...",
+    "mindmap": {
+      "title": "منشئ المنطق التوليدي",
+      "description": "صف السلوك المطلوب.",
+      "placeholder": "مثال: عند ورود رسالة جديدة من مجهول، صنف النية ووجه...",
+      "generate": "حساب المنطق",
+      "generating": "جارٍ الحساب...",
+      "trigger": "مُدخل",
+      "action": "مُخرج",
+      "save": "حفظ",
+      "cancel": "إلغاء",
+      "error": "خطأ في بناء الجملة. قم بتحسين الاستعلام."
+    },
+    "filters": {
+      "allTriggers": "كل المشغلات",
+      "all": "الكل",
+      "active": "نشط",
+      "inactive": "غير نشط"
+    },
+    "table": {
+      "selectAll": "تحديد الكل"
+    },
+    "batchActions": {
+      "selected": "{{count}} محدد",
+      "activate": "تفعيل",
+      "deactivate": "تعطيل"
+    },
+    "toasts": {
+      "batchDelete": "تم حذف {{count}}.",
+      "batchStatus": "تم تحديث {{count}}.",
+      "batchError": "خطأ في الدفعة: {{error}}",
+      "updateSuccess": "تم تحديث المنطق.",
+      "createSuccess": "تم إنشاء المنطق."
+    },
+    "deleteModal": {
+      "title": "حذف جماعي",
+      "description": "حذف العناصر المحددة؟ لا يمكن التراجع."
+    },
+    "builder": {
+      "errors": {
+        "oneTrigger": "يسمح بمُدخل واحد لكل تدفق."
+      },
+      "defaultName": "منطق بدون عنوان",
+      "namePlaceholder": "اسم المنطق",
+      "save": "حفظ",
+      "toasts": {
+        "updateSuccess": "تم تحديث المنطق.",
+        "createSuccess": "تم إنشاء المنطق."
+      },
+      "newWorkflowTitle": "تدفق منطق جديد",
+      "untitled": "منطق بدون عنوان",
+      "saving": "جارٍ الحفظ...",
+      "cancel": "إلغاء",
+      "new": "تدفق جديد",
+      "triggers": "المشغلات",
+      "actions": "الإجراءات",
+      "zoomIn": "تكبير",
+      "zoomOut": "تصغير",
+      "fitView": "ملاءمة العرض"
+    },
+    "generator": {
+      "title": "بناء توليدي",
+      "description": "بناء منطق بمساعدة الذكاء الاصطناعي.",
+      "placeholder": "صف المنطق...",
+      "generate": "توليد",
+      "buildManually": "الوضع اليدوي"
+    },
+    "nodes": {
+      "common": {
+        "configure": "يتطلب تكوين"
+      },
+      "newContact": {
+        "title": "كيان جديد",
+        "details": "حدث اتصال أول."
+      },
+      "stageChanged": {
+        "title": "تغيير المرحلة",
+        "details": "إلى: {{stage}}",
+        "detailsEmpty": "حدد مرحلة."
+      },
+      "tagAdded": {
+        "title": "إضافة وسم",
+        "details": "وسم: {{tag}}",
+        "detailsEmpty": "حدد وسماً."
+      },
+      "trigger": {
+        "title": "المُدخل",
+        "details": "تكوين"
+      },
+      "sendMessage": {
+        "title": "إرسال",
+        "details": "\"{{message}}...\"",
+        "detailsEmpty": "تعيين المحتوى."
+      },
+      "addTag": {
+        "title": "إضافة وسم",
+        "details": "وسم: {{tag}}",
+        "detailsEmpty": "تعيين وسم."
+      },
+      "changeStage": {
+        "title": "تعيين المرحلة",
+        "details": "إلى: {{stage}}",
+        "detailsEmpty": "تعيين مرحلة."
+      },
+      "wait": {
+        "title": "تأخير",
+        "details": "{{days}} يوم"
+      },
+      "action": {
+        "title": "عملية",
+        "details": "تكوين"
+      }
+    },
+    "settings": {
+      "noOptions": "لا توجد معلمات.",
+      "delete": "إزالة العقدة",
+      "stageLabel": "المرحلة",
+      "selectStage": "تحديد",
+      "tagLabel": "الوسم",
+      "tagPlaceholder": "مثال: أولوية",
+      "messageLabel": "المحتوى",
+      "messagePlaceholder": "اكتب رسالتك...",
+      "tagToAddLabel": "الوسم",
+      "tagToAddPlaceholder": "مثال: تمت المعالجة",
+      "newStageLabel": "المرحلة المستهدفة",
+      "waitDaysLabel": "المدة (أيام)",
+      "label": "تسمية",
+      "stage": "المرحلة",
+      "tag": "الوسم",
+      "message": "الرسالة",
+      "newStage": "مرحلة جديدة",
+      "days": "أيام الانتظار"
+    },
+    "panel": {
+      "triggers": "المُدخلات",
+      "actions": "المُخرجات",
+      "nodes": {
+        "newContact": "كيان جديد",
+        "stageChanged": "تغيير الحالة",
+        "tagAdded": "حدث وسم",
+        "keywordMatch": "طابق الكلمة",
+        "sendMessage": "إرسال",
+        "addTag": "وسم",
+        "changeStage": "تعيين حالة",
+        "wait": "تأخير"
+      }
+    }
+  },
+  "auth": {
+    "createTitle": "تهيئة الحساب",
+    "welcomeTitle": "الوصول إلى المحطة",
+    "emailLabel": "البريد الإلكتروني",
+    "emailPlaceholder": "name@company.com",
+    "passwordLabel": "كلمة المرور",
+    "passwordPlaceholder": "••••••••",
+    "signInButton": "وصول",
+    "signingInButton": "جارٍ المصادقة...",
+    "signUpButton": "تسجيل",
+    "signingUpButton": "جارٍ التسجيل...",
+    "promptSignUp": "جديد في Nexus؟",
+    "promptSignIn": "مستخدم حالي؟",
+    "verifyEmailToast": "تم إرسال إشارة التحقق. تحقق من البريد الإلكتروني.",
+    "signInSuccessToast": "المصادقة ناجحة.",
+    "passwordStrength": {
+      "tooShort": "قصير",
+      "weak": "ضعيف",
+      "medium": "متوسط",
+      "strong": "قوي",
+      "veryStrong": "آمن"
+    },
+    "errors": {
+      "weakPassword": "تنبيه أمني: تعقيد كلمة المرور غير كافٍ."
+    }
+  },
+  "contacts": {
+      "searchPlaceholder": "بحث بالاسم، الهاتف، أو الوسم...",
+      "sortByActivity": "فرز حسب آخر نشاط",
+      "sortByName": "فرز حسب الاسم",
+      "noResults": "لم يتم العثور على جهات اتصال.",
+      "table": {
+          "contact": "جهة الاتصال",
+          "phone": "رقم الهاتف",
+          "tags": "الوسوم",
+          "stage": "المرحلة",
+          "priority": "الأولوية",
+          "dueDate": "تاريخ الاستحقاق",
+          "lastActivity": "آخر نشاط"
+      }
+  },
+  "modals": {
+      "addLead": {
+          "title": "إدخال يدوي",
+          "description": "إنشاء سجل كيان جديد.",
+          "contactName": "الاسم",
+          "contactNamePlaceholder": "الاسم الكامل",
+          "assignToInstance": "تعيين للعقدة",
+          "selectAccount": "اختر حساباً",
+          "phoneOptional": "نقطة النهاية (اختياري)",
+          "phonePlaceholder": "رقم الهاتف",
+          "tagsOptional": "الوسوم",
+          "tagsPlaceholder": "مفصولة بفواصل",
+          "tagsHelp": "وسوم التصنيف.",
+          "save": "إنشاء",
+          "errors": {
+              "nameRequired": "الاسم مطلوب.",
+              "instanceRequired": "العقدة مطلوبة."
+          },
+          "toasts": {
+              "success": "تم إنشاء السجل."
+          }
+      },
+      "deleteInstance": {
+          "title": "إخراج العقدة من الخدمة",
+          "description": "تأكيد الحذف للعقدة {{phoneNumber}}. فقدان البيانات دائم.",
+          "confirm": "تنفيذ"
+      },
+      "buttons": {
+          "confirm": "تأكيد",
+          "cancel": "إلغاء"
+      }
+  }
+}

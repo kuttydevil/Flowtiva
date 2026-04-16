@@ -1,0 +1,10 @@
+-- =================================================================
+-- MIGRATION SCRIPT: ADD CONTEXT FIELD
+-- =================================================================
+-- Adds a 'context' text field to the whatsapp_instances table for storing
+-- additional knowledge base or contextual information for the AI agent.
+
+ALTER TABLE public.whatsapp_instances ADD COLUMN IF NOT EXISTS context TEXT;
+
+-- Notify PostgREST to reload the schema cache.
+NOTIFY pgrst, 'reload schema';

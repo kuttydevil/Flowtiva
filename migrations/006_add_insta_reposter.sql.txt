@@ -1,0 +1,106 @@
+
+-- =================================================================
+-- MIGRATION SCRIPT: ADD INSTAGRAM REELS REPOSTER (SaaS Enhanced)
+-- =================================================================
+
+-- 1. Reposter Jobs Table
+-- Stores configuration for automated reposting tasks.
+CREATE TABLE IF NOT EXISTS public.instagram_reposter_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+  instance_id UUID NOT NULL REFERENCES public.instagram_instances(id) ON DELETE CASCADE, -- The source account doing the posting
+  target_username TEXT NOT NULL, -- The account to scrape reels from
+  max_reels INT DEFAULT 10,
+  repost_interval_minutes INT DEFAULT 60,
+  
+  -- SaaS Customization Fields
+  niche TEXT DEFAULT 'General', -- e.g., "Luxury Real Estate", "Fitness Coaching"
+  tone TEXT DEFAULT 'Professional', -- e.g., "Hype", "Professional", "Funny"
+  custom_cta TEXT, -- e.g., "Link in bio for 50% off", "DM 'HOUSE' for info"
+  
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'failed')),
+  last_run_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reposter_jobs_instance ON public.instagram_reposter_jobs (instance_id);
+CREATE INDEX IF NOT EXISTS idx_reposter_jobs_status ON public.instagram_reposter_jobs (status);
+
+-- 2. Reposter Ledger Table
+-- Tracks which reels have already been processed to prevent duplicates.
+CREATE TABLE IF NOT EXISTS public.instagram_reposter_ledger (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES public.instagram_reposter_jobs(id) ON DELETE CASCADE,
+  reel_id TEXT NOT NULL, -- The unique ID or URL part of the original reel
+  original_url TEXT,
+  caption_generated TEXT,
+  reposted_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  UNIQUE(job_id, reel_id)
+);
+CREATE INDEX IF NOT EXISTS idx_reposter_ledger_job ON public.instagram_reposter_ledger (job_id);
+
+-- 3. RLS Policies
+ALTER TABLE public.instagram_reposter_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.instagram_reposter_ledger ENABLE ROW LEVEL SECURITY;
+
+-- Jobs Policies
+DROP POLICY IF EXISTS "Enable all access for users based on tenant_id" ON public.instagram_reposter_jobs;
+CREATE POLICY "Enable all access for users based on tenant_id" ON public.instagram_reposter_jobs
+  FOR ALL USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid());
+
+-- Ledger Policies
+DROP POLICY IF EXISTS "Enable all access for users based on job ownership" ON public.instagram_reposter_ledger;
+CREATE POLICY "Enable all access for users based on job ownership" ON public.instagram_reposter_ledger
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.instagram_reposter_jobs j
+    WHERE j.id = instagram_reposter_ledger.job_id AND j.tenant_id = auth.uid()
+  ));
+
+-- 4. Realtime
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'instagram_reposter_jobs') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.instagram_reposter_jobs;
+  END IF;
+END $$;
+
+-- 5. RPC to get job stats
+CREATE OR REPLACE FUNCTION public.get_reposter_jobs_with_stats()
+RETURNS TABLE (
+  id UUID,
+  instance_id UUID,
+  instance_username TEXT,
+  target_username TEXT,
+  max_reels INT,
+  repost_interval_minutes INT,
+  niche TEXT,
+  tone TEXT,
+  custom_cta TEXT,
+  status TEXT,
+  last_run_at TIMESTAMPTZ,
+  reposted_count BIGINT,
+  created_at TIMESTAMPTZ
+)
+LANGUAGE sql STABLE AS $$
+  SELECT
+    j.id,
+    j.instance_id,
+    i.username AS instance_username,
+    j.target_username,
+    j.max_reels,
+    j.repost_interval_minutes,
+    j.niche,
+    j.tone,
+    j.custom_cta,
+    j.status,
+    j.last_run_at,
+    (SELECT COUNT(*) FROM public.instagram_reposter_ledger l WHERE l.job_id = j.id) AS reposted_count,
+    j.created_at
+  FROM public.instagram_reposter_jobs j
+  JOIN public.instagram_instances i ON j.instance_id = i.id
+  WHERE j.tenant_id = auth.uid()
+  ORDER BY j.created_at DESC;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_reposter_jobs_with_stats() TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

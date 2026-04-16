@@ -1,0 +1,130 @@
+{
+  "entities": {
+    "WhatsAppInstance": {
+      "title": "WhatsApp Instance",
+      "description": "A WhatsApp automation instance",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "customPrompt": { "type": "string" },
+        "context": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "linking", "running", "inactive", "failed"] },
+        "isActive": { "type": "boolean" },
+        "agentType": { "type": "string", "enum": ["business", "personal"] },
+        "enabled_tools": { "type": "array", "items": { "type": "string" } },
+        "last_error": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "worker_hostname": { "type": "string" },
+        "worker_pid": { "type": "number" },
+        "last_heartbeat": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tenantId", "phoneNumber", "status", "isActive"]
+    },
+    "WhatsAppMessage": {
+      "title": "WhatsApp Message",
+      "description": "A message sent or received via WhatsApp",
+      "type": "object",
+      "properties": {
+        "instanceId": { "type": "string" },
+        "contactName": { "type": "string" },
+        "sender": { "type": "string", "enum": ["user", "ai", "agent"] },
+        "messageText": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" }
+      },
+      "required": ["instanceId", "contactName", "sender", "timestamp"]
+    },
+    "WhatsAppContact": {
+      "title": "WhatsApp Contact",
+      "description": "A contact associated with a WhatsApp instance",
+      "type": "object",
+      "properties": {
+        "instance_id": { "type": "string" },
+        "contact_name": { "type": "string" },
+        "phone_number": { "type": "string" },
+        "last_message_text": { "type": "string" },
+        "last_message_at": { "type": "string", "format": "date-time" },
+        "unread_count": { "type": "number" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "crm_stage": { "type": "string" },
+        "priority": { "type": "string", "enum": ["High", "Medium", "Low"] },
+        "due_date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["instance_id", "contact_name"]
+    },
+    "InstagramInstance": {
+      "title": "Instagram Instance",
+      "description": "An Instagram automation instance",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string" },
+        "username": { "type": "string" },
+        "customPrompt": { "type": "string" },
+        "context": { "type": "string" },
+        "status": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "last_error": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "worker_hostname": { "type": "string" },
+        "worker_pid": { "type": "number" },
+        "last_heartbeat": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tenantId", "username", "status", "isActive"]
+    },
+    "Workflow": {
+      "title": "Workflow",
+      "description": "An automation workflow",
+      "type": "object",
+      "properties": {
+        "tenant_id": { "type": "string" },
+        "name": { "type": "string" },
+        "trigger": { "type": "object" },
+        "actions": { "type": "array" },
+        "is_active": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tenant_id", "name", "trigger", "actions"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User profile and billing data",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "plan_name": { "type": "string" },
+        "subscription_status": { "type": "string" },
+        "billing_cycle": { "type": "string" },
+        "instance_count": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/whatsapp_instances/{instanceId}": {
+      "schema": "WhatsAppInstance",
+      "description": "WhatsApp instances"
+    },
+    "/whatsapp_messages/{messageId}": {
+      "schema": "WhatsAppMessage",
+      "description": "WhatsApp messages"
+    },
+    "/whatsapp_contacts/{contactId}": {
+      "schema": "WhatsAppContact",
+      "description": "WhatsApp contacts"
+    },
+    "/instagram_instances/{instanceId}": {
+      "schema": "InstagramInstance",
+      "description": "Instagram instances"
+    },
+    "/workflows/{workflowId}": {
+      "schema": "Workflow",
+      "description": "Automation workflows"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "flowtiva",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "start:frontend": "vite",
+    "start:backend": "python3 backend/listener.py",
+    "build": "vite build",
+    "lint": "tsc --noEmit",
+    "deploy": "vercel --prod",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/genai": "^0.15.0",
+    "@stripe/react-stripe-js": "^6.2.0",
+    "@stripe/stripe-js": "^9.2.0",
+    "firebase": "^12.12.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.1",
+    "lucide-react": "^0.553.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.14.1",
+    "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
