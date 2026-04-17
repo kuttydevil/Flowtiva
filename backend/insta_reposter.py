@@ -1,34 +1,29 @@
+# backend/insta_reposter.py  (SaaS Instagram Reel Reposter Daemon)
+# Runs as a long-lived daemon managed by listener.py.
+# Polls Firestore for active reposter jobs and processes them on schedule.
 
 import warnings
-warnings.simplefilter('ignore', FutureWarning)
+warnings.simplefilter("ignore", FutureWarning)
 
 import sys
 import time
-import json
 import os
-import shutil
-import random
-import requests
-import datetime
-import zipfile
-import stat
-import threading
-import socket
 import base64
+import random
 import traceback
+import socket
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from tenacity import retry, wait_exponential, stop_after_attempt
 from dotenv import load_dotenv
 
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 import google.generativeai as genai
 from google.api_core.exceptions import ServiceUnavailable, DeadlineExceeded
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
-# Selenium & Media Processing
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -37,566 +32,506 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from selenium.webdriver.common.action_chains import ActionChains
-from webdriver_manager.chrome import ChromeDriverManager
+
 import cv2
 import yt_dlp
-import pyperclip
 
-# --- CONFIGURATION (SaaS Mode) ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
+# Shared Termux/ARM Chrome utilities
+from termux_utils import find_chromedriver, build_chrome_options, STEALTH_SCRIPT
 
-WORKER_ID = f"Reposter-{socket.gethostname()}-{os.getpid()}"
-OUTPUT_FOLDER = "temp_reels_download"
+# ── Configuration ────────────────────────────────────────────────────────────
+load_dotenv()
 
-# Hardcoded Selectors (Based on your successful local test)
+GEMINI_API_KEY  = os.getenv("GEMINI_API_KEY")
+WORKER_ID       = f"Reposter-{socket.gethostname()}-{os.getpid()}"
+OUTPUT_FOLDER   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_reels_download")
+
+# Instagram upload selectors
 SELECTORS = {
     "navigation": {
-        "sidebar_create_btn": "//a[.//svg[@aria-label='New post']]",
+        "sidebar_create_btn":     "//a[.//svg[@aria-label='New post']]",
         "sidebar_create_btn_alt": "//span[text()='Create']/ancestor::a",
-        "create_menu_post": "//span[text()='Post']",
-        "file_input": "//input[@type='file']",
-        "notification_not_now": "//button[text()='Not Now']"
+        "create_menu_post":       "//span[text()='Post']",
+        "file_input":             "//input[@type='file']",
+        "notification_not_now":   "//button[text()='Not Now']",
     },
     "upload_flow": {
-        "crop_select_btn": "//button[@type='button'][.//svg[@aria-label='Select crop']]",
-        "crop_original_option": "//span[contains(text(), 'Original')]/ancestor::div[@role='button']",
-        "next_btn": "//div[@role='button' and text()='Next']",
-        "caption_area": "//div[@role='textbox' and @aria-label='Write a caption...']",
-        "share_btn": "//div[@role='button' and text()='Share']",
-        "upload_confirm": "//span[contains(text(), 'shared')] | //img[contains(@alt, 'checkmark')]",
-        "close_modal_btn": "//div[@role='button']//svg[@aria-label='Close']"
-    }
+        "crop_select_btn":    "//button[@type='button'][.//svg[@aria-label='Select crop']]",
+        "crop_original":      "//span[contains(text(), 'Original')]/ancestor::div[@role='button']",
+        "next_btn":           "//div[@role='button' and text()='Next']",
+        "caption_area":       "//div[@role='textbox' and @aria-label='Write a caption...']",
+        "share_btn":          "//div[@role='button' and text()='Share']",
+        "upload_confirm":     "//span[contains(text(), 'shared')] | //img[contains(@alt, 'checkmark')]",
+        "close_modal_btn":    "//div[@role='button']//svg[@aria-label='Close']",
+    },
 }
 
-# Initialize Clients
+# ── Initialise Firebase & Gemini ─────────────────────────────────────────────
 try:
-    load_dotenv()
     try:
         firebase_admin.initialize_app()
     except ValueError:
-        pass
-    import os
+        pass  # already initialised
     db_id = os.getenv("FIRESTORE_DATABASE_ID")
-    db = firestore.client(database_id=db_id) if db_id else firestore.client()
+    db    = firestore.client(database_id=db_id) if db_id else firestore.client()
     genai.configure(api_key=GEMINI_API_KEY)
-    print(f"[{WORKER_ID}] SaaS Reposter Engine initialized.")
+    print(f"[{WORKER_ID}] SaaS Reposter Engine initialised.")
 except Exception as e:
-    print(f"FATAL: Initialization failed: {e}")
-    exit(1)
+    print(f"FATAL: Initialisation failed: {e}")
+    sys.exit(1)
 
-# --- GEMINI HELPERS ---
-def file_to_base64(path):
+# ── Gemini helpers ────────────────────────────────────────────────────────────
+def file_to_base64(path: str) -> str:
     with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode('utf-8')
+        return base64.b64encode(f.read()).decode("utf-8")
 
-def extract_frames(video_path, num_frames=6):
-    """Extracts frames for AI analysis."""
+def extract_frames(video_path: str, num_frames: int = 6) -> List[str]:
+    """Extract evenly-spaced frames from a video for AI analysis."""
     frames = []
     try:
         cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened(): return []
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        if total_frames <= 0: return []
-        interval = total_frames // num_frames
+        if not cap.isOpened():
+            return []
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total <= 0:
+            return []
+        interval  = max(total // num_frames, 1)
         base_name = os.path.splitext(os.path.basename(video_path))[0]
-        
+        out_dir   = os.path.dirname(video_path)
         for i in range(num_frames):
             cap.set(cv2.CAP_PROP_POS_FRAMES, i * interval)
             ret, frame = cap.read()
             if ret:
-                frame_path = os.path.join(os.path.dirname(video_path), f"{base_name}_frame_{i}.jpg")
-                cv2.imwrite(frame_path, frame)
-                frames.append(frame_path)
+                fp = os.path.join(out_dir, f"{base_name}_frame_{i}.jpg")
+                cv2.imwrite(fp, frame)
+                frames.append(fp)
         cap.release()
     except Exception as e:
         print(f"[{WORKER_ID}] Frame extraction warning: {e}")
     return frames
 
 @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
-def generate_viral_caption(video_path, niche, tone, cta):
-    """
-    Generates a dynamic caption using gemma-3-27b-it.
-    Uses Base64 frames as requested.
-    """
-    print(f"[{WORKER_ID}] Generating caption for Niche: {niche}, Tone: {tone}...")
-    
-    content_parts = []
-    
-    prompt_text = f"""
-    You are a professional social media manager specializing in the '{niche}' industry.
-    
-    **Goal:** Write a viral Instagram Reel caption based on the images provided (frames from a video).
-    **Target Audience:** People interested in {niche}.
-    **Tone:** {tone}.
-    **Mandatory Call to Action (CTA):** "{cta}"
+def generate_viral_caption(video_path: str, niche: str, tone: str, cta: str) -> str:
+    """Generate a niche-specific viral caption using Gemini vision."""
+    print(f"[{WORKER_ID}] Generating caption — niche={niche}, tone={tone}…")
 
-    **Instructions:**
-    1. Analyze the visual content from the provided images.
-    2. Write a 'Hook' (first line) that stops the scroll. Use the {tone} tone.
-    3. Provide value or context related to {niche}.
-    4. End with the specific CTA: "{cta}".
-    5. Add 15-20 relevant hashtags for {niche} at the bottom.
-
-    **Output:** Provide ONLY the caption text. No "Here is the caption" preambles.
-    """
-    content_parts.append(prompt_text)
-
-    frames = extract_frames(video_path)
-    if frames:
-        for f_path in frames:
-            b64_data = file_to_base64(f_path)
-            content_parts.append({
-                "inline_data": {
-                    "mime_type": "image/jpeg",
-                    "data": b64_data
-                }
-            })
-            try: os.remove(f_path)
-            except: pass
-    else:
-        print(f"[{WORKER_ID}] Warning: No frames extracted. Caption will be generic.")
-
-    model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash", 
-        generation_config={
-            "temperature": 0.8,
-            "top_p": 0.95,
-            "max_output_tokens": 1000,
-        }
+    prompt = (
+        f"You are a professional social media manager specialising in '{niche}'.\n\n"
+        f"**Goal:** Write a viral Instagram Reel caption based on the images (video frames).\n"
+        f"**Target audience:** People interested in {niche}.\n"
+        f"**Tone:** {tone}.\n"
+        f"**Mandatory CTA:** \"{cta}\"\n\n"
+        f"**Instructions:**\n"
+        f"1. Write a scroll-stopping hook as the first line.\n"
+        f"2. Add value or context related to {niche}.\n"
+        f"3. End with: \"{cta}\"\n"
+        f"4. Add 15-20 relevant hashtags at the bottom.\n\n"
+        f"**Output:** ONLY the caption text. No preamble."
     )
 
-    for attempt in range(3):
+    content_parts: List[Any] = [prompt]
+    frames = extract_frames(video_path)
+    if frames:
+        for fp in frames:
+            content_parts.append({
+                "inline_data": {"mime_type": "image/jpeg", "data": file_to_base64(fp)}
+            })
+            try:
+                os.remove(fp)
+            except Exception:
+                pass
+    else:
+        print(f"[{WORKER_ID}] Warning: no frames extracted — caption will be generic.")
+
+    model = genai.GenerativeModel(
+        model_name="gemini-2.0-flash",
+        generation_config={"temperature": 0.8, "top_p": 0.95, "max_output_tokens": 1000},
+    )
+    try:
+        resp = model.generate_content(content_parts)
+        return resp.text.strip()
+    except Exception as e:
+        print(f"[{WORKER_ID}] Caption generation failed: {e}")
+        return f"Check this out! #{niche.replace(' ', '')} \n\n{cta} #viral #trending"
+
+# ── Selenium / browser helpers ────────────────────────────────────────────────
+def get_driver(session_label: str = "default") -> Optional[webdriver.Chrome]:
+    """Create and return a headless Chrome driver for the reposter."""
+    session_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "reposter_sessions",
+        session_label,
+    )
+    os.makedirs(session_path, exist_ok=True)
+
+    # Remove stale lock if present
+    lock = os.path.join(session_path, "SingletonLock")
+    if os.path.exists(lock):
         try:
-            response = model.generate_content(content_parts)
-            return response.text.strip()
-        except (ServiceUnavailable, DeadlineExceeded) as e:
-             print(f"[{WORKER_ID}] Gemini API error (attempt {attempt+1}): {e}")
-             time.sleep(5)
+            os.remove(lock)
+        except Exception:
+            pass
+
+    log_path = os.path.join(session_path, "chromedriver.log")
+
+    chromedriver_path = find_chromedriver(log_fn=print)
+    if not chromedriver_path:
+        print(f"[{WORKER_ID}] FATAL: ChromeDriver not found.")
+        return None
+
+    chrome_options = build_chrome_options(
+        session_path=session_path,
+        proxy_server=os.getenv("PROXY_SERVER", ""),
+        block_images=True,
+    )
+
+    for attempt in range(1, 4):
+        try:
+            print(f"[{WORKER_ID}] WebDriver init attempt {attempt}…")
+            service = Service(
+                executable_path=chromedriver_path,
+                service_args=["--verbose", f"--log-path={log_path}"],
+            )
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            driver.set_window_size(1280, 800)
+            driver.execute_cdp_cmd(
+                "Page.addScriptToEvaluateOnNewDocument", {"source": STEALTH_SCRIPT}
+            )
+            print(f"[{WORKER_ID}] WebDriver ready.")
+            return driver
         except Exception as e:
-             print(f"[{WORKER_ID}] Unexpected Gemini error: {e}")
-             break
-             
-    return f"Check this out! {niche} \n\n{cta} #viral #trending"
-
-import shutil
-
-def find_chrome_binary():
-    """Locate the Chrome or Chromium binary on the system."""
-    possibilities = [
-        'google-chrome',
-        'google-chrome-stable',
-        'chromium',
-        'chromium-browser',
-        '/usr/bin/google-chrome',
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/data/data/com.termux/files/usr/bin/chromium'
-    ]
-    for p in possibilities:
-        path = shutil.which(p) if not p.startswith('/') else (p if os.path.exists(p) else None)
-        if path:
-            return path
+            print(f"[{WORKER_ID}] Attempt {attempt} failed: {e}")
+            if os.path.exists(log_path):
+                try:
+                    with open(log_path) as lf:
+                        for line in lf.readlines()[-10:]:
+                            print(f"    CDLOG: {line.strip()}")
+                except Exception:
+                    pass
+            if attempt < 3:
+                time.sleep(5)
     return None
 
-def find_or_download_chromedriver():
-    """Locate or download ChromeDriver."""
-    import requests
-    import zipfile
-    import stat
-    from webdriver_manager.chrome import ChromeDriverManager
-
-    script_dir = os.getcwd()
-    local_chromedriver_dir = os.path.join(script_dir, "chromedriver-linux64")
-    local_chromedriver_path = os.path.join(local_chromedriver_dir, "chromedriver")
-    
-    possible_paths = [
-        "/usr/bin/chromedriver",
-        "/data/data/com.termux/files/usr/bin/chromedriver",
-        local_chromedriver_path
-    ]
-    for path in possible_paths:
-        if os.path.exists(path):
-            return path
-
+def instagram_login(driver, username: str, password: str) -> bool:
+    """Log in to Instagram; returns True on success."""
+    driver.get("https://www.instagram.com/")
+    time.sleep(5)
     try:
-        return ChromeDriverManager().install()
-    except:
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.XPATH, "//a[@href='/direct/inbox/']"))
+        )
+        print(f"[{WORKER_ID}] Already logged in as {username}.")
+        return True
+    except TimeoutException:
         pass
 
-    # Manual Fallback
-    VERSION = "127.0.6533.72"
-    URL = f"https://storage.googleapis.com/chrome-for-testing-public/{VERSION}/linux64/chromedriver-linux64.zip"
-    zip_path = os.path.join(script_dir, "chromedriver.zip")
+    print(f"[{WORKER_ID}] Logging in as {username}…")
     try:
-        resp = requests.get(URL)
-        resp.raise_for_status()
-        with open(zip_path, "wb") as f: f.write(resp.content)
-        with zipfile.ZipFile(zip_path, 'r') as z: z.extractall(script_dir)
-        os.remove(zip_path)
-        os.chmod(local_chromedriver_path, os.stat(local_chromedriver_path).st_mode | stat.S_IEXEC)
-        return local_chromedriver_path
-    except:
-        return None
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.NAME, "username"))
+        ).send_keys(username)
+        driver.find_element(By.NAME, "password").send_keys(password)
+        driver.find_element(By.XPATH, "//button[@type='submit']").click()
+        time.sleep(10)
 
-# --- SELENIUM HELPERS ---
-def get_driver():
-    session_path = os.path.join(os.getcwd(), 'selenium_reposter_session')
-    os.makedirs(session_path, exist_ok=True)
-    log_path = os.path.join(session_path, "chromedriver.log")
-    
-    try:
-        chrome_options = webdriver.ChromeOptions()
-        
-        # --- NEW: Locate Chrome Binary ---
-        chrome_binary = find_chrome_binary()
-        if chrome_binary:
-            print(f"[{WORKER_ID}] Setting Chrome binary location to: {chrome_binary}")
-            chrome_options.binary_location = chrome_binary
-        else:
-            print(f"[{WORKER_ID}] WARNING: Could not locate Chrome binary automatically.")
-
-        chrome_options.add_argument('--headless=new')
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-setuid-sandbox')
-        chrome_options.add_argument('--disable-seccomp-filter-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--no-zygote')
-        chrome_options.add_argument('--disable-software-rasterizer')
-        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
-        chrome_options.add_argument('--password-store=basic')
-        chrome_options.add_argument('--ignore-certificate-errors')
-        chrome_options.add_argument("--metrics-recording-only")
-        chrome_options.add_argument("--mute-audio")
-        chrome_options.add_argument("--no-first-run")
-        chrome_options.add_argument("--no-default-browser-check")
-        chrome_options.add_argument("--disable-application-cache")
-        
-        # Proxy Configuration
-        proxy_server = os.getenv("PROXY_SERVER", "")
-        if proxy_server:
-            chrome_options.add_argument(f'--proxy-server={proxy_server}')
-            print(f"[{WORKER_ID}] Applying proxy: {proxy_server}")
-            
-        # Block images and heavy media
-        chrome_options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
-        chrome_options.page_load_strategy = "eager"
-        # Persistent session
-        chrome_options.add_argument(f"--user-data-dir={session_path}")
-        
-        driver = None
-        chromedriver_path = find_or_download_chromedriver()
-        if not chromedriver_path:
-            raise Exception("Could not find or download ChromeDriver.")
-
-        for attempt in range(1, 4):
+        # Dismiss "Save Info" / notifications popups
+        for _ in range(2):
             try:
-                print(f"[{WORKER_ID}] Initializing WebDriver (Attempt {attempt})...")
-                service = Service(executable_path=chromedriver_path, service_args=["--verbose", f"--log-path={log_path}"])
-                driver = webdriver.Chrome(service=service, options=chrome_options)
+                WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable(
+                        (By.XPATH, SELECTORS["navigation"]["notification_not_now"])
+                    )
+                ).click()
+                time.sleep(2)
+            except TimeoutException:
                 break
-            except Exception as e:
-                print(f"[{WORKER_ID}] Initialization attempt {attempt} failed: {e}")
-                if os.path.exists(log_path):
-                    try:
-                        with open(log_path, "r") as f:
-                            lines = f.readlines()
-                            print(f"[{WORKER_ID}] --- CHROMEDRIVER CRASH LOG (Tail) ---")
-                            for line in lines[-10:]:
-                                print(f"    {line.strip()}")
-                    except: pass
-                if attempt < 3:
-                    time.sleep(5)
-                else:
-                    raise e
 
-        # --- ANTI-DETECTION JS INJECTION ---
-        stealth_script = """
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            window.chrome = { runtime: {} };
-        """
-        driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {'source': stealth_script})
-        
-        return driver
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//a[@href='/direct/inbox/']"))
+        )
+        print(f"[{WORKER_ID}] Login successful.")
+        return True
     except Exception as e:
-        print(f"Driver Error: {e}")
-        return None
+        print(f"[{WORKER_ID}] Login failed: {e}")
+        return False
 
-def download_reel(url, output_folder):
+def download_reel(url: str, output_folder: str) -> Optional[str]:
+    """Download a reel via yt-dlp and return the local file path."""
     os.makedirs(output_folder, exist_ok=True)
     ydl_opts = {
-        'outtmpl': os.path.join(output_folder, '%(id)s.%(ext)s'),
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'quiet': True,
-        'no_warnings': True,
+        "outtmpl":    os.path.join(output_folder, "%(id)s.%(ext)s"),
+        "format":     "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "quiet":      True,
+        "no_warnings": True,
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+            info     = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             return filename
     except Exception as e:
-        print(f"Download error for {url}: {e}")
+        print(f"[{WORKER_ID}] Download error for {url}: {e}")
         return None
 
-# --- CORE UPLOAD FUNCTION (Based on your Log) ---
-def upload_reel_selenium(driver, video_path, caption):
+def upload_reel_selenium(driver, video_path: str, caption: str, job_id: str) -> bool:
     """
-    Performs the upload process using the robust selectors and flow from your local test.
-    Flow: Create -> Post -> Upload -> Crop(Original) -> Next -> Edit -> Next -> Caption(Clipboard) -> Share
+    Perform the full Instagram upload flow:
+    Create → Post → Upload file → Crop (Original) → Next → Edit → Next → Caption → Share
     """
-    print(f"[{WORKER_ID}] Starting upload sequence for {os.path.basename(video_path)}")
-    
-    # 1. Click Create
+    print(f"[{WORKER_ID}] Uploading {os.path.basename(video_path)}…")
     try:
+        # 1. Click Create
         try:
-            create_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, SELECTORS["navigation"]["sidebar_create_btn"])))
-            create_btn.click()
+            WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, SELECTORS["navigation"]["sidebar_create_btn"])
+                )
+            ).click()
         except TimeoutException:
-            print("Trying alternate Create button selector...")
-            create_btn = driver.find_element(By.XPATH, SELECTORS["navigation"]["sidebar_create_btn_alt"])
-            create_btn.click()
-        
+            print(f"[{WORKER_ID}] Trying alternate Create selector…")
+            driver.find_element(
+                By.XPATH, SELECTORS["navigation"]["sidebar_create_btn_alt"]
+            ).click()
         time.sleep(2)
 
-        # 2. Check for "Post" menu item (if Create opens a menu)
+        # 2. Select "Post" from the Create menu (if shown)
         try:
-            post_menu = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, SELECTORS["navigation"]["create_menu_post"])))
-            post_menu.click()
-            print("Clicked 'Post' from Create menu.")
+            WebDriverWait(driver, 3).until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, SELECTORS["navigation"]["create_menu_post"])
+                )
+            ).click()
+            print(f"[{WORKER_ID}] Clicked 'Post' from Create menu.")
         except TimeoutException:
-            print("Direct upload modal likely open.")
-
-        # 3. Upload File (Hidden Input)
+            print(f"[{WORKER_ID}] Direct upload modal assumed open.")
         time.sleep(2)
+
+        # 3. Upload file via hidden input
         file_input = driver.find_element(By.XPATH, SELECTORS["navigation"]["file_input"])
         file_input.send_keys(os.path.abspath(video_path))
-        print(f"File {os.path.basename(video_path)} sent to input.")
+        print(f"[{WORKER_ID}] File sent to input.")
 
-        # 4. Crop to Original
-        print("Waiting for Crop screen...")
-        crop_btn = WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["crop_select_btn"])))
-        crop_btn.click()
+        # 4. Select Original crop
+        print(f"[{WORKER_ID}] Waiting for Crop screen…")
+        WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["crop_select_btn"]))
+        ).click()
         time.sleep(1)
-        
-        original_option = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["crop_original_option"])))
-        original_option.click()
-        print("Selected 'Original' crop.")
+        WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["crop_original"]))
+        ).click()
+        print(f"[{WORKER_ID}] Selected Original crop.")
         time.sleep(1)
 
-        # 5. Navigate Next (Crop -> Edit)
-        next_btn = driver.find_element(By.XPATH, SELECTORS["upload_flow"]["next_btn"])
-        next_btn.click()
+        # 5. Next (Crop → Edit)
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["next_btn"]))
+        ).click()
         time.sleep(2)
 
-        # 6. Navigate Next (Edit -> Caption)
-        next_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["next_btn"])))
-        next_btn.click()
+        # 6. Next (Edit → Caption)
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["next_btn"]))
+        ).click()
         time.sleep(2)
 
-        # 7. Enter Caption via Clipboard (Crucial Fix)
-        print("Entering caption via Clipboard...")
-        caption_area = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["caption_area"])))
+        # 7. Enter caption — type char by char (more reliable than clipboard on ARM)
+        print(f"[{WORKER_ID}] Entering caption…")
+        caption_area = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["caption_area"]))
+        )
         caption_area.click()
         time.sleep(1)
-        
-        pyperclip.copy(caption)
-        actions = ActionChains(driver)
-        # Use Control+V for Windows/Linux, Command+V logic could be added for Mac if running locally
-        actions.key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
-        time.sleep(2)
-        print("Caption pasted.")
+        for char in caption:
+            caption_area.send_keys(char)
+            time.sleep(random.uniform(0.02, 0.06))
+        print(f"[{WORKER_ID}] Caption entered.")
+        time.sleep(1)
 
         # 8. Share
-        share_btn = driver.find_element(By.XPATH, SELECTORS["upload_flow"]["share_btn"])
-        share_btn.click()
-        print("Clicked Share. Waiting for confirmation...")
+        driver.find_element(By.XPATH, SELECTORS["upload_flow"]["share_btn"]).click()
+        print(f"[{WORKER_ID}] Share clicked. Waiting for confirmation…")
 
-        # 9. Confirm Upload
-        WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, SELECTORS["upload_flow"]["upload_confirm"])))
-        print("Upload confirmed!")
+        # 9. Confirm upload
+        WebDriverWait(driver, 90).until(
+            EC.presence_of_element_located((By.XPATH, SELECTORS["upload_flow"]["upload_confirm"]))
+        )
+        print(f"[{WORKER_ID}] Upload confirmed!")
 
-        # 10. Close Modal
+        # 10. Close modal
         try:
-            close_btn = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, SELECTORS["upload_flow"]["close_modal_btn"])))
-            close_btn.click()
+            WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, SELECTORS["upload_flow"]["close_modal_btn"])
+                )
+            ).click()
         except TimeoutException:
-            print("Could not close modal via button. Reloading page.")
             driver.get("https://www.instagram.com/")
 
         return True
 
     except Exception as e:
-        print(f"Upload failed: {e}")
-        # Save screenshot for debugging
+        print(f"[{WORKER_ID}] Upload failed: {e}")
         try:
-            driver.save_screenshot(f"error_{WORKFLOW_ID}_{time.time()}.png")
-        except: pass
+            driver.save_screenshot(f"error_{job_id}_{int(time.time())}.png")
+        except Exception:
+            pass
         return False
 
-# --- JOB PROCESSOR ---
+# ── Job processor ─────────────────────────────────────────────────────────────
+def process_job(job: Dict):
+    job_id = job["id"]
+    print(f"[{WORKER_ID}] Starting Job {job_id} (target: @{job.get('target_username')})")
 
-def process_job(job):
-    print(f"[{WORKER_ID}] Starting Job {job['id']} (Target: @{job['target_username']})")
-    
     driver = None
     try:
-        # 1. Fetch Credentials
-        doc = db.collection("instagram_instances").document(job['instance_id']).get()
-        if not doc.exists:
-            print("Instance not found.")
+        # Fetch instance credentials
+        inst_doc = db.collection("instagram_instances").document(job["instance_id"]).get()
+        if not inst_doc.exists:
+            print(f"[{WORKER_ID}] Instance {job['instance_id']} not found.")
+            db.collection("instagram_reposter_jobs").document(job_id).update({"status": "failed"})
             return
-        
-        instance_creds = doc.to_dict()
-        
-        # 2. Init Browser
-        driver = get_driver()
-        if not driver: return
-        driver.set_window_size(1280, 800)
-        
-        # 3. Login
-        driver.get("https://www.instagram.com/")
-        time.sleep(5)
-        
-        try:
-            WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.XPATH, "//a[@href='/direct/inbox/']")))
-            print("Already logged in.")
-        except TimeoutException:
-            print(f"Logging in as {instance_creds['username']}...")
-            try:
-                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(instance_creds['username'])
-                driver.find_element(By.NAME, "password").send_keys(instance_creds['password'])
-                driver.find_element(By.XPATH, "//button[@type='submit']").click()
-                time.sleep(10)
-                # Dismiss "Save Info" or "Notifications"
-                try:
-                    not_now = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, SELECTORS["navigation"]["notification_not_now"])))
-                    not_now.click()
-                except: pass
-            except Exception as e:
-                print(f"Login failed: {e}")
-                db.collection("instagram_reposter_jobs").document(job['id']).update({"status": "failed"})
-                return
+        creds = inst_doc.to_dict()
 
-        # 4. Scrape
+        # Init browser with per-instance session
+        driver = get_driver(session_label=job["instance_id"])
+        if not driver:
+            db.collection("instagram_reposter_jobs").document(job_id).update({"status": "failed"})
+            return
+
+        # Login
+        if not instagram_login(driver, creds["username"], creds["password"]):
+            db.collection("instagram_reposter_jobs").document(job_id).update({"status": "failed"})
+            return
+
+        # Scrape reels from target profile
         target_url = f"https://www.instagram.com/{job['target_username']}/reels/"
         driver.get(target_url)
         time.sleep(5)
-        
-        anchors = driver.find_elements(By.XPATH, "//a[contains(@href, '/reel/')]")
-        found_links = [a.get_attribute("href") for a in anchors][:job['max_reels']]
-        print(f"Found {len(found_links)} reels.")
-        
-        for link in found_links:
+
+        anchors     = driver.find_elements(By.XPATH, "//a[contains(@href, '/reel/')]")
+        reel_links  = list({a.get_attribute("href") for a in anchors})[:job.get("max_reels", 3)]
+        print(f"[{WORKER_ID}] Found {len(reel_links)} reel(s).")
+
+        processed = 0
+        for link in reel_links:
             try:
-                # 5. Deduplicate
-                reel_id = link.rstrip('/').split('/')[-1]
-                ledger_ref = db.collection("instagram_reposter_ledger")
-                query = ledger_ref.where(filter=FieldFilter("job_id", "==", job['id'])).where(filter=FieldFilter("reel_id", "==", reel_id)).limit(1)
-                existing = query.get()
-                
-                if existing:
-                    print(f"Skipping {reel_id} (Already reposted).")
-                    continue
-                
-                print(f"Processing new reel: {reel_id}")
-                
-                # 6. Download
-                video_path = download_reel(link, OUTPUT_FOLDER)
-                if not video_path: continue
-                
-                # 7. Generate Caption
-                caption = generate_viral_caption(
-                    video_path, 
-                    niche=job.get('niche', 'General'), 
-                    tone=job.get('tone', 'Professional'), 
-                    cta=job.get('custom_cta', 'Check bio!')
+                reel_id = link.rstrip("/").split("/")[-1]
+
+                # Deduplication check
+                existing = (
+                    db.collection("instagram_reposter_ledger")
+                    .where(filter=FieldFilter("job_id",  "==", job_id))
+                    .where(filter=FieldFilter("reel_id", "==", reel_id))
+                    .limit(1)
+                    .get()
                 )
-                
-                # 8. Upload (REAL)
-                success = upload_reel_selenium(driver, video_path, caption)
-                
+                if existing:
+                    print(f"[{WORKER_ID}] Skipping {reel_id} — already reposted.")
+                    continue
+
+                print(f"[{WORKER_ID}] Processing reel {reel_id}…")
+
+                video_path = download_reel(link, OUTPUT_FOLDER)
+                if not video_path:
+                    continue
+
+                caption = generate_viral_caption(
+                    video_path,
+                    niche=job.get("niche",      "General"),
+                    tone= job.get("tone",       "Professional"),
+                    cta=  job.get("custom_cta", "Check bio!"),
+                )
+
+                success = upload_reel_selenium(driver, video_path, caption, job_id)
+
+                # Cleanup downloaded file
+                try:
+                    os.remove(video_path)
+                except Exception:
+                    pass
+
                 if success:
                     db.collection("instagram_reposter_ledger").add({
-                        "job_id": job['id'],
-                        "reel_id": reel_id,
-                        "original_url": link,
+                        "job_id":            job_id,
+                        "reel_id":           reel_id,
+                        "original_url":      link,
                         "caption_generated": caption,
-                        "timestamp": firestore.SERVER_TIMESTAMP
+                        "timestamp":         firestore.SERVER_TIMESTAMP,
                     })
-                    
-                    # Cleanup
-                    try: os.remove(video_path)
-                    except: pass
-                    
-                    # Rate Limit
-                    print("Processed 1 reel. Yielding to prevent ban.")
-                    break 
+                    processed += 1
+                    # One reel per cycle — rate-limit protection
+                    print(f"[{WORKER_ID}] Reposted 1 reel. Yielding to prevent ban.")
+                    break
 
             except Exception as inner_e:
-                print(f"Error processing reel {link}: {inner_e}")
+                print(f"[{WORKER_ID}] Error processing reel {link}: {inner_e}")
                 continue
 
-        # Update Last Run
-        db.collection("instagram_reposter_jobs").document(job['id']).update({"last_run_at": firestore.SERVER_TIMESTAMP})
-        
+        # Update job last-run timestamp
+        db.collection("instagram_reposter_jobs").document(job_id).update({
+            "last_run_at": firestore.SERVER_TIMESTAMP
+        })
+        print(f"[{WORKER_ID}] Job {job_id} complete. Reposted: {processed}.")
+
     except Exception as e:
-        print(f"Job failed: {e}")
+        print(f"[{WORKER_ID}] Job {job_id} failed: {e}")
         traceback.print_exc()
     finally:
-        if driver: 
-            try: driver.quit()
-            except: pass
+        if driver:
+            try:
+                driver.quit()
+            except Exception:
+                pass
 
+# ── Main loop ─────────────────────────────────────────────────────────────────
 def main_loop():
-    print(f"[{WORKER_ID}] Starting SaaS Reposter Engine Loop...")
+    print(f"[{WORKER_ID}] Starting SaaS Reposter Engine Loop…")
     while True:
         try:
-            # 1. Update heartbeat for reposter
+            # Heartbeat
             try:
                 db.collection("instagram_reposter_logs").document("runner_status").set({
                     "last_heartbeat": firestore.SERVER_TIMESTAMP,
-                    "worker_id": WORKER_ID,
-                    "status": "running"
-                })
-            except Exception as hb_err:
+                    "worker_id":      WORKER_ID,
+                    "status":         "running",
+                }, merge=True)
+            except Exception:
                 pass
-                
-            jobs_ref = db.collection("instagram_reposter_jobs")
-            query = jobs_ref.where(filter=FieldFilter("status", "==", "active"))
-            docs = query.get()
-            
+
+            # Fetch active jobs
+            docs = (
+                db.collection("instagram_reposter_jobs")
+                .where(filter=FieldFilter("status", "==", "active"))
+                .get()
+            )
             jobs = [{"id": doc.id, **doc.to_dict()} for doc in docs]
-            
-            jobs_processed = 0
+
+            jobs_run = 0
             for job in jobs:
                 try:
-                    last_run = job.get('last_run_at')
-                    interval_mins = job.get('repost_interval_minutes', 60)
-                    should_run = False
-                    if not last_run:
-                        should_run = True
-                    else:
-                        # Firestore timestamp is a datetime object in Python
-                        last_run_dt = last_run
-                        if (datetime.now(timezone.utc) - last_run_dt).total_seconds() > (interval_mins * 60):
-                            should_run = True
-                    
+                    last_run      = job.get("last_run_at")
+                    interval_mins = job.get("repost_interval_minutes", 60)
+                    should_run    = (
+                        not last_run
+                        or (datetime.now(timezone.utc) - last_run).total_seconds()
+                        > interval_mins * 60
+                    )
                     if should_run:
                         process_job(job)
-                        jobs_processed += 1
-                except Exception as job_err:
-                    print(f"Error checking job {job.get('id')}: {job_err}")
+                        jobs_run += 1
+                except Exception as je:
+                    print(f"[{WORKER_ID}] Error checking job {job.get('id')}: {je}")
 
-            if jobs_processed == 0:
-                print(f"[{WORKER_ID}] No jobs due. Sleeping...")
-            
-            time.sleep(60) 
-        except Exception as e:
-            print(f"Main loop error: {e}")
+            if jobs_run == 0:
+                print(f"[{WORKER_ID}] No jobs due. Sleeping…")
+
             time.sleep(60)
+
+        except Exception as e:
+            print(f"[{WORKER_ID}] Main loop error: {e}")
+            time.sleep(60)
+
 
 if __name__ == "__main__":
     main_loop()

@@ -7,6 +7,7 @@
  */
 
 import React from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Avatar } from '../ui/Avatar';
 import type { ActiveView } from '../../types';
 import { useTranslation } from '../../contexts/LanguageContext';
@@ -27,27 +28,57 @@ interface NavItemProps {
   isActive: boolean;
   onClick: () => void;
   isCollapsed: boolean;
+  view: string;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick, isCollapsed }) => (
+const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick, isCollapsed, view }) => (
   <button
     onClick={onClick}
     className={cn(
-      "flex items-center w-full h-10 px-3 mt-1 rounded-lg transition-all duration-200 group text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      "relative flex items-center w-full h-11 px-3 rounded-xl transition-all duration-300 group text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring select-none",
       isActive
-        ? "bg-primary/10 text-primary shadow-sm"
-        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+        ? "text-primary bg-primary/5"
+        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
     )}
     title={isCollapsed ? label : ''}
     disabled={isActive}
   >
+    {isActive && (
+        <motion.div
+            layoutId="active-nav-bg"
+            className="absolute inset-0 bg-primary/10 rounded-xl z-0"
+            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+        />
+    )}
+    
     <div className={cn(
-        "flex-shrink-0 w-5 h-5 transition-colors duration-200", 
+        "relative z-10 flex-shrink-0 w-5 h-5 transition-transform duration-300 group-active:scale-95", 
         isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
     )}>
         {icon}
     </div>
-    {!isCollapsed && <span className="ms-3 truncate">{label}</span>}
+    
+    <AnimatePresence mode="wait">
+        {!isCollapsed && (
+            <motion.span 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2 }}
+                className="relative z-10 ms-3 truncate"
+            >
+                {label}
+            </motion.span>
+        )}
+    </AnimatePresence>
+
+    {isActive && !isCollapsed && (
+        <motion.div 
+            layoutId="active-nav-indicator"
+            className="absolute left-0 w-1 h-5 bg-primary rounded-r-full"
+            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+        />
+    )}
   </button>
 );
 
@@ -89,29 +120,70 @@ const SidebarContent: React.FC<SidebarContentProps> = ({ isCollapsed, setIsColla
     ];
 
     return (
-    <div className={cn(
-        "h-full bg-background/95 backdrop-blur-xl border-r border-border/40 flex flex-col transition-all duration-300 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]",
-        isCollapsed ? "w-20" : "w-64"
-    )}>
+    <motion.div 
+        initial={false}
+        animate={{ width: isCollapsed ? 80 : 256 }}
+        className={cn(
+            "h-screen sticky top-0 bg-background/95 backdrop-blur-xl border-r border-border/40 flex flex-col transition-colors duration-300 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.05)] z-20 overflow-hidden",
+        )}
+    >
       <div className={cn(
-          "flex items-center h-16 px-4 flex-shrink-0 mb-4",
+          "flex items-center h-20 px-4 flex-shrink-0 mb-2",
           isCollapsed ? "justify-center" : "justify-between"
       )}>
-        {!isCollapsed ? (
-            <div className="flex items-center gap-2.5">
-                <LogoIcon />
-                <h1 className="text-xl font-bold text-foreground tracking-tight">Flowtiva</h1>
-            </div>
-        ) : <LogoIcon />}
-        <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground hidden lg:block transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          {isCollapsed ? <ExpandIcon /> : <CollapseIcon />}
-        </button>
+        <AnimatePresence mode="wait">
+            {!isCollapsed ? (
+                <motion.div 
+                    key="logo-full"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="flex items-center gap-3"
+                >
+                    <div className="p-2 bg-primary/10 rounded-2xl shadow-inner ring-1 ring-primary/20">
+                        <LogoIcon />
+                    </div>
+                    <span className="text-xl font-black text-foreground tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-foreground to-foreground/70">Flowtiva</span>
+                </motion.div>
+            ) : (
+                <motion.div
+                    key="logo-small"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="p-2 bg-primary/10 rounded-2xl shadow-inner ring-1 ring-primary/20"
+                >
+                    <LogoIcon />
+                </motion.div>
+            )}
+        </AnimatePresence>
+        
+        {!isCollapsed && (
+            <button 
+                onClick={() => setIsCollapsed(true)} 
+                className="p-2 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground hidden lg:flex transition-all active:scale-95 border border-transparent hover:border-border/50"
+            >
+                <CollapseIcon />
+            </button>
+        )}
       </div>
+
+      {isCollapsed && (
+          <div className="flex justify-center mb-6">
+              <button 
+                onClick={() => setIsCollapsed(false)} 
+                className="p-2.5 rounded-2xl bg-muted/50 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all border border-transparent hover:border-primary/20 shadow-sm overflow-hidden group"
+              >
+                <ExpandIcon />
+              </button>
+          </div>
+      )}
       
-      <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto scrollbar-hide">
+      <nav className="flex-1 px-3 space-y-1 overflow-y-auto scrollbar-hide py-2">
         {navItems.map(item => (
             <NavItem
                 key={item.view}
+                view={item.view}
                 label={item.label}
                 icon={item.icon}
                 isActive={activeView === item.view}
@@ -121,24 +193,24 @@ const SidebarContent: React.FC<SidebarContentProps> = ({ isCollapsed, setIsColla
         ))}
       </nav>
       
-      <div className="p-4 mt-auto">
+      <div className="p-4 border-t border-border/40 mt-auto bg-muted/5">
         <div className={cn(
-            "flex items-center gap-3 p-2 rounded-xl transition-colors", 
-            isCollapsed ? "justify-center" : "hover:bg-muted/50 cursor-pointer"
+            "flex items-center gap-3 p-2 rounded-2xl transition-all duration-300", 
+            isCollapsed ? "justify-center" : "hover:bg-muted/80 cursor-pointer group/user"
         )}>
-          <div className="relative">
-             <Avatar name="Flowtiva Admin" className="w-9 h-9 rounded-full ring-2 ring-background shadow-sm" />
-             <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full"></span>
+          <div className="relative flex-shrink-0">
+             <Avatar name="Flowtiva Admin" className="w-10 h-10 rounded-2xl ring-2 ring-background shadow-md transition-transform group-hover/user:scale-105" />
+             <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-status-green border-2 border-background rounded-full shadow-sm"></span>
           </div>
           {!isCollapsed && (
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-foreground truncate">Flowtiva</p>
-              <p className="text-xs text-muted-foreground truncate">{t('dashboard.header.administrator')}</p>
+              <p className="text-sm font-bold text-foreground truncate tracking-tight">System Admin</p>
+              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/70 truncate">{t('dashboard.header.administrator')}</p>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
 )};
 
 

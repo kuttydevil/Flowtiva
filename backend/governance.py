@@ -1,123 +1,132 @@
 # backend/governance.py
+# AI governance layer: daily usage limits, retry-with-backoff, telemetry logging.
+# Wraps any AI-calling function as a decorator.
+
 import time
+import os
 from functools import wraps
 from typing import Callable, Any
 from datetime import datetime
 
 import firebase_admin
 from firebase_admin import firestore
+from dotenv import load_dotenv
 
-# Initialize Firestore if not already done
+load_dotenv()
+
 try:
     firebase_admin.initialize_app()
 except ValueError:
     pass
 
-from dotenv import load_dotenv
-import os
-load_dotenv()
-
 db_id = os.getenv("FIRESTORE_DATABASE_ID")
-db = firestore.client(database_id=db_id) if db_id else firestore.client()
+db    = firestore.client(database_id=db_id) if db_id else firestore.client()
 
-# Mirroring frontend aiPolicy
+# ── Policy (mirrors frontend aiPolicy) ───────────────────────────────────────
 AI_POLICY = {
-    "max_retries": 2,
-    "daily_call_limit": 5000,
+    "max_retries":       2,
+    "daily_call_limit":  5000,
 }
 
-# Placeholder for the logger that will be injected from the main script
-log = lambda level, message, **kwargs: print(f"[{level}] {message}")
+# ── Pluggable logger ──────────────────────────────────────────────────────────
+log = lambda level, message, **_: print(f"[{level}] {message}")
 
-def set_logger(logger_func):
-    """Injects the main logger from the parent script."""
+def set_logger(logger_func: Callable) -> None:
+    """Inject the logger from the parent worker script."""
     global log
     log = logger_func
 
-def _log_telemetry(tenant_id: str, action_key: str, status: str, duration_ms: int = None, error_message: str = None):
-    """Logs a telemetry event to the database."""
+# ── Internal helpers ──────────────────────────────────────────────────────────
+def _log_telemetry(
+    tenant_id:   str,
+    action_key:  str,
+    status:      str,
+    duration_ms: int = None,
+    error_msg:   str = None,
+) -> None:
     try:
-        telemetry_data = {
-            "tenant_id": tenant_id,
-            "action_key": action_key,
-            "status": status,
-            "latency_ms": duration_ms,
-            "error_message": error_message,
-            "timestamp": firestore.SERVER_TIMESTAMP
-        }
-        db.collection("ai_telemetry").add(telemetry_data)
+        db.collection("ai_telemetry").add({
+            "tenant_id":     tenant_id,
+            "action_key":    action_key,
+            "status":        status,
+            "latency_ms":    duration_ms,
+            "error_message": error_msg,
+            "timestamp":     firestore.SERVER_TIMESTAMP,
+        })
     except Exception as e:
-        log("ERROR", f"Failed to log AI telemetry: {e}")
+        log("ERROR", f"Failed to log telemetry: {e}")
 
+# ── Public decorator ──────────────────────────────────────────────────────────
 def execute_with_policy(action_key: str, tenant_id: str):
     """
-    A decorator that wraps an AI call with governance policies:
-    1. Checks daily usage limits.
-    2. Retries on failure with exponential backoff.
-    3. Logs detailed telemetry for each attempt.
-    4. Atomically increments usage count on success.
+    Decorator that wraps an AI call with:
+      1. Daily usage-limit check.
+      2. Exponential-backoff retry loop (max_retries attempts).
+      3. Detailed telemetry logging for every attempt.
+      4. Atomic usage counter increment on success.
+
+    Usage:
+        @execute_with_policy("generate_reply", tenant_id)
+        def call_gemini():
+            return model.generate_content(...)
     """
     def decorator(fetcher: Callable[..., Any]):
         @wraps(fetcher)
         def wrapper(*args, **kwargs):
-            # 1. Check daily limit
-            today = datetime.utcnow().strftime('%Y-%m-%d')
-            usage_doc_id = f"{tenant_id}_{today}"
+            today         = datetime.utcnow().strftime("%Y-%m-%d")
+            usage_doc_id  = f"{tenant_id}_{today}"
+
+            # 1. Daily limit check
             try:
                 usage_ref = db.collection("ai_usage").document(usage_doc_id)
                 usage_doc = usage_ref.get()
-                current_calls = usage_doc.to_dict().get('calls', 0) if usage_doc.exists else 0
-                
-                if current_calls >= AI_POLICY["daily_call_limit"]:
-                    err_msg = "Daily AI call limit exceeded for tenant."
-                    log("WARN", err_msg)
-                    _log_telemetry(tenant_id, action_key, 'error', error_message=err_msg)
-                    raise Exception(err_msg)
+                current   = usage_doc.to_dict().get("calls", 0) if usage_doc.exists else 0
+                if current >= AI_POLICY["daily_call_limit"]:
+                    msg = "Daily AI call limit exceeded."
+                    log("WARN", msg)
+                    _log_telemetry(tenant_id, action_key, "error", error_msg=msg)
+                    raise Exception(msg)
             except Exception as e:
+                # If the limit check itself fails, log and proceed (fail open).
                 log("ERROR", f"Could not check AI usage limit: {e}")
 
-            # 2. Retry Loop
-            attempt = 0
+            # 2. Retry loop
+            last_exc   = None
             start_time = time.time()
-            last_exception = None
 
-            while attempt <= AI_POLICY["max_retries"]:
+            for attempt in range(AI_POLICY["max_retries"] + 1):
                 try:
-                    # 3. Call the actual AI function
-                    result = fetcher(*args, **kwargs)
-                    
-                    # 4. On success, increment usage and log telemetry
+                    result      = fetcher(*args, **kwargs)
                     duration_ms = int((time.time() - start_time) * 1000)
-                    
-                    # Atomic increment in Firestore
+
+                    # Atomic increment on success
                     usage_ref = db.collection("ai_usage").document(usage_doc_id)
                     usage_ref.set({
-                        "tenant_id": tenant_id,
-                        "date": today,
-                        "calls": firestore.Increment(1),
-                        "last_call_at": firestore.SERVER_TIMESTAMP
+                        "tenant_id":    tenant_id,
+                        "date":         today,
+                        "calls":        firestore.Increment(1),
+                        "last_call_at": firestore.SERVER_TIMESTAMP,
                     }, merge=True)
-                    
-                    _log_telemetry(tenant_id, action_key, 'success', duration_ms=duration_ms)
-                    
+
+                    _log_telemetry(tenant_id, action_key, "success", duration_ms=duration_ms)
                     return result
 
                 except Exception as e:
-                    last_exception = e
+                    last_exc    = e
                     duration_ms = int((time.time() - start_time) * 1000)
-                    log("WARN", f"AI action '{action_key}' failed on attempt {attempt + 1}: {e}")
-                    _log_telemetry(tenant_id, action_key, 'error', duration_ms=duration_ms, error_message=str(e))
-                    
-                    attempt += 1
-                    if attempt <= AI_POLICY["max_retries"]:
-                        # Exponential backoff
-                        sleep_time = (2 ** attempt) + (time.time() % 1) # Add jitter
-                        log("INFO", f"Retrying in {sleep_time:.2f} seconds...")
-                        time.sleep(sleep_time)
-            
-            # 5. Handle final failure after all retries
-            log("ERROR", f"AI action '{action_key}' failed after {AI_POLICY['max_retries'] + 1} attempts.")
-            raise last_exception or Exception("AI action failed after all retries.")
+                    log("WARN", f"AI action '{action_key}' attempt {attempt + 1} failed: {e}")
+                    _log_telemetry(
+                        tenant_id, action_key, "error",
+                        duration_ms=duration_ms, error_msg=str(e),
+                    )
+                    if attempt < AI_POLICY["max_retries"]:
+                        backoff = (2 ** (attempt + 1)) + (time.time() % 1)  # exponential + jitter
+                        log("INFO", f"Retrying in {backoff:.2f}s…")
+                        time.sleep(backoff)
+
+            # All retries exhausted
+            log("ERROR", f"AI action '{action_key}' failed after {AI_POLICY['max_retries'] + 1} attempt(s).")
+            raise last_exc or Exception("AI action failed after all retries.")
 
         return wrapper
     return decorator

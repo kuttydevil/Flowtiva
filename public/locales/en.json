@@ -312,6 +312,7 @@
         "running": "Operational. Processing data streams.",
         "inactive": "Standby mode. Signal processing paused.",
         "failed": "System Fault. Check diagnostics.",
+        "stopped": "Instance stopped manually.",
         "healthy": "Optimal",
         "unresponsive": "Latency High",
         "diagnosticInfo": "Diagnostic Information",
@@ -403,6 +404,13 @@
         "instructions": "WhatsApp > Settings > Linked Devices > Link Device > Link via Phone Number.",
         "successTitle": "Node Operational",
         "successDesc": "Endpoint +974{{phoneNumber}} is online.",
+        "linkingStatus": {
+            "init": "Booting worker process...",
+            "connect": "Establishing socket connection...",
+            "request": "Requesting auth token...",
+            "wait": "Awaiting server response...",
+            "prepare": "Finalizing secure handshake..."
+        },
         "loadingStatus": {
             "init": "Booting worker process...",
             "connect": "Establishing socket connection...",

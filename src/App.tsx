@@ -23,6 +23,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { User } from 'firebase/auth';
+import { motion, AnimatePresence } from 'motion/react';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { useNotifications } from './hooks/useNotifications';
@@ -32,7 +33,8 @@ import { db } from '../firebase';
 import { useToast, ToastProvider } from './contexts/ToastContext';
 import { LanguageProvider, useTranslation } from './contexts/LanguageContext';
 import { AIProvider } from './contexts/AIContext';
-import { ActiveView, WhatsAppInstance, WhatsAppContact, Priority, WhatsAppInstanceStatus } from './types';
+import { ActiveView, WhatsAppInstance, WhatsAppContact, Priority, WhatsAppInstanceStatus, WhatsAppMessage } from './types';
+import { cn } from './lib/utils';
 
 // --- LAZY-LOADED COMPONENTS ---
 const AuthPage = React.lazy(() => import('./components/auth/AuthPage'));
@@ -55,11 +57,29 @@ const SUPERADMIN_EMAIL = 'flowtiva@gmail.com';
 type View = 'homepage' | 'auth' | 'loading' | 'dashboard' | 'update_password';
 
 const CenteredLoader: React.FC = () => (
-    <div className="h-full w-full flex items-center justify-center bg-brand-secondary p-4">
-        <svg className="animate-spin h-8 w-8 text-brand-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
+    <div className="h-full w-full flex flex-col items-center justify-center bg-background p-4 min-h-[400px]">
+        <div className="relative w-16 h-16">
+            <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-full h-full border-4 border-primary/20 border-t-primary rounded-full shadow-[0_0_15px_rgba(34,197,94,0.1)]"
+            />
+            <motion.div 
+                animate={{ scale: [0.8, 1.1, 0.8] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute inset-0 flex items-center justify-center"
+            >
+                <div className="w-4 h-4 bg-primary rounded-full shadow-lg" />
+            </motion.div>
+        </div>
+        <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="mt-6 text-sm font-bold text-muted-foreground uppercase tracking-[0.2em] animate-pulse"
+        >
+            Allocating Nexus Resources
+        </motion.p>
     </div>
 );
 
@@ -235,35 +255,59 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     }
     
     const renderContent = () => {
+        let content;
         switch (activeView) {
             case 'overview':
-                return <HubOverview 
+                content = <HubOverview 
                     contacts={allContacts} instances={instances} isLoading={isLoading} onRefresh={fetchData} onAddInstance={() => setIsAddModalOpen(true)}
                     onToggleInstance={handleToggleInstance} onDeleteInstance={(inst) => setInstanceForDelete(inst)} onEditSettings={(inst) => setInstanceForSettings(inst)}
                     onViewLogs={(inst) => setLogInstance(inst)} onInstanceClick={handleInstanceClick} logInstance={logInstance} onViewContact={handleOpenDrawer}
                 />;
+                break;
             case 'contacts':
-                return <AllContactsView contacts={allContacts} isLoading={isLoading} onViewContact={handleOpenDrawer} />;
+                content = <AllContactsView contacts={allContacts} isLoading={isLoading} onViewContact={handleOpenDrawer} />;
+                break;
             default:
-                return <HubOverview 
+                content = <HubOverview 
                     contacts={allContacts} instances={instances} isLoading={isLoading} onRefresh={fetchData} onAddInstance={() => setIsAddModalOpen(true)}
                     onToggleInstance={handleToggleInstance} onDeleteInstance={(inst) => setInstanceForDelete(inst)} onEditSettings={(inst) => setInstanceForSettings(inst)}
                     onViewLogs={(inst) => setLogInstance(inst)} onInstanceClick={handleInstanceClick} logInstance={logInstance} onViewContact={handleOpenDrawer}
                 />;
         }
+
+        return (
+            <AnimatePresence mode="wait">
+                <motion.div
+                    key={activeView}
+                    initial={{ opacity: 0, scale: 0.99, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.99, y: -10 }}
+                    transition={{ duration: 0.4, cubicBezier: [0.16, 1, 0.3, 1] }}
+                    className="h-full"
+                >
+                    {content}
+                </motion.div>
+            </AnimatePresence>
+        );
     };
     
     return (
-        <div className="h-screen bg-brand-secondary text-brand-text-primary font-sans flex overflow-hidden">
+        <div className="h-screen bg-background text-foreground font-sans flex overflow-hidden selection:bg-primary/20">
             <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen} activeView={activeView} setActiveView={setActiveView} />
-            <div className={`flex-1 flex flex-col overflow-y-hidden transition-all duration-300 lg:ms-20 ${!isCollapsed ? 'lg:!ms-64' : ''}`}>
+            <motion.div 
+                layout
+                className={cn(
+                    "flex-1 flex flex-col overflow-y-hidden transition-[margin] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] lg:ms-20",
+                    !isCollapsed && "lg:!ms-64"
+                )}
+            >
                 <Header onMenuClick={() => setIsMobileOpen(true)} activeView={activeView} user={user!} />
-                <main className="flex-1 overflow-y-auto bg-brand-secondary">
+                <main className="flex-1 overflow-y-auto bg-muted/[0.03]">
                     <Suspense fallback={<CenteredLoader />}>
                         {renderContent()}
                     </Suspense>
                 </main>
-            </div>
+            </motion.div>
             
             <Suspense fallback={null}>
                 <ContactDetailDrawer isOpen={!!contactForDrawer} onClose={handleCloseDrawer} contact={contactForDrawer} instance={instanceForDrawer} onTagsUpdated={(contactName: string, tags: string[]) => { if (contactForDrawer) { handleTagsUpdated(contactForDrawer.instance_id, contactName, tags); } }} onCrmStageChange={(contactName: string, stage: string) => { if (contactForDrawer) { handleStageChange(contactForDrawer.instance_id, contactName, stage); } }} onPriorityChange={(contactName: string, priority: Priority) => { if (contactForDrawer) { handlePriorityChange(contactForDrawer.instance_id, contactName, priority); } }} onDueDateChange={(contactName: string, date: string | null) => { if (contactForDrawer) { handleDueDateChange(contactForDrawer.instance_id, contactName, date); } }} />

@@ -1,11 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { firebaseService } from '../../../services/firebaseService';
 import { ActivityLog } from '../../../types';
 import { Card, CardHeader, CardTitle, CardContent } from '../../ui/Card';
 import { Skeleton } from '../../ui/Skeleton';
 import { Avatar } from '../../ui/Avatar';
 import { useTranslation } from '../../../contexts/LanguageContext';
+import { cn } from '../../../lib/utils';
+
+const ActivityIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+);
 
 const timeAgo = (isoTimestamp: string | null | undefined, t: (key: string, replacements?: any) => string): string => {
     if (!isoTimestamp) return '';
@@ -20,10 +28,7 @@ const timeAgo = (isoTimestamp: string | null | undefined, t: (key: string, repla
     if (hours < 24) return t('time.hoursAgo', { count: hours });
     const days = Math.floor(hours / 24);
     if (days < 30) return t('time.daysAgo', { count: days });
-    const months = Math.floor(days / 30);
-    if (months < 12) return t('time.monthsAgo', { count: months });
-    const years = Math.floor(days / 365);
-    return t('time.yearsAgo', { count: years });
+    return t('time.longAgo');
 };
 
 export const RecentActivityCard: React.FC = () => {
@@ -36,7 +41,7 @@ export const RecentActivityCard: React.FC = () => {
             setIsLoading(true);
             try {
                 const data = await firebaseService.getRecentActivity();
-                setActivity(data);
+                setActivity(data.slice(0, 5));
             } catch (error) {
                 console.error("Error fetching recent activity:", error);
             } finally {
@@ -47,49 +52,65 @@ export const RecentActivityCard: React.FC = () => {
     }, []);
 
     return (
-        <Card className="bg-card/50 backdrop-blur-md border-border/50 shadow-sm overflow-hidden rounded-[24px] group">
-            <CardHeader className="pb-4 bg-muted/20 border-b border-border/50">
-                <CardTitle className="text-lg font-bold tracking-tight text-foreground">{t('hub.recentActivity.title')}</CardTitle>
+        <Card className="bg-card/40 backdrop-blur-xl border-border/50 shadow-2xl overflow-hidden rounded-[32px] group transition-all duration-500 relative z-0">
+            <CardHeader className="pb-6 bg-muted/[0.03] border-b border-border/10">
+                <CardTitle className="flex items-center gap-4 text-xl font-black tracking-tight text-foreground/90">
+                    <div className="p-3 bg-indigo-500/10 rounded-2xl shadow-inner group-hover:scale-110 transition-transform duration-500">
+                        <ActivityIcon className="h-6 w-6 text-indigo-500" />
+                    </div>
+                    {t('hub.recentActivity.title')}
+                </CardTitle>
             </CardHeader>
-            <CardContent className="p-4">
+            <CardContent className="p-6">
                 {isLoading ? (
-                    <div className="space-y-4 p-2">
+                    <div className="space-y-6">
                         {[...Array(3)].map((_, i) => (
-                             <div key={i} className="flex items-center space-x-4">
-                                <Skeleton className="h-10 w-10 rounded-full" />
+                             <div key={i} className="flex items-center gap-4">
+                                <Skeleton className="h-12 w-12 rounded-2xl" />
                                 <div className="flex-1 space-y-2">
-                                    <Skeleton className="h-3 w-3/4 rounded-full" />
-                                    <Skeleton className="h-2 w-1/2 rounded-full" />
+                                    <Skeleton className="h-4 w-3/4 rounded-full" />
+                                    <Skeleton className="h-3 w-1/2 rounded-full" />
                                 </div>
                             </div>
                         ))}
                     </div>
                 ) : activity.length === 0 ? (
-                    <div className="text-center py-12 px-4">
-                        <div className="w-12 h-12 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-muted-foreground/50">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                            </svg>
-                        </div>
-                        <p className="text-sm font-medium text-muted-foreground">{t('hub.recentActivity.empty')}</p>
+                    <div className="text-center py-16">
+                        <motion.div 
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="w-16 h-16 bg-muted/20 rounded-3xl flex items-center justify-center mx-auto mb-4"
+                        >
+                            <ActivityIcon className="h-8 w-8 text-muted-foreground/30" />
+                        </motion.div>
+                        <p className="text-sm font-bold text-muted-foreground/60 tracking-tight">{t('hub.recentActivity.empty')}</p>
                     </div>
                 ) : (
-                    <ul className="space-y-1">
-                        {activity.map((log, idx) => (
-                            <li key={`${log.timestamp}-${log.contact_name}-${idx}`}>
-                                <div className="flex items-start gap-4 p-3 rounded-2xl hover:bg-muted/50 transition-all group/item">
-                                    <Avatar name={log.contact_name} className="w-10 h-10 flex-shrink-0 ring-2 ring-background shadow-md group-hover/item:scale-105 transition-transform" />
+                    <div className="space-y-2">
+                        {activity.map((log, i) => (
+                            <motion.div
+                                key={`${log.timestamp}-${log.contact_name}-${i}`}
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: i * 0.1 }}
+                            >
+                                <div className="flex items-start gap-4 p-4 rounded-3xl hover:bg-muted/30 transition-all group/item shadow-sm hover:shadow-md">
+                                    <Avatar name={log.contact_name} className="w-12 h-12 flex-shrink-0 ring-4 ring-background shadow-xl group-hover/item:scale-110 transition-transform duration-500" />
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-center">
-                                            <p className="font-bold text-sm text-foreground truncate group-hover/item:text-primary transition-colors">{log.contact_name}</p>
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/60 ml-2">{timeAgo(log.timestamp, t)}</p>
+                                        <div className="flex justify-between items-start">
+                                            <p className="font-black text-base text-foreground/90 truncate group-hover/item:text-primary transition-colors">{log.contact_name}</p>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 mt-0.5">{timeAgo(log.timestamp, t)}</span>
                                         </div>
-                                        <p className="text-xs text-muted-foreground truncate mt-1 italic leading-relaxed">"{log.message_text}"</p>
+                                        <div className="relative mt-2 p-3 bg-muted/20 rounded-2xl border border-white/5 italic">
+                                            <p className="text-xs text-muted-foreground/80 leading-relaxed line-clamp-2">
+                                                "{log.message_text}"
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </li>
+                            </motion.div>
                         ))}
-                    </ul>
+                    </div>
                 )}
             </CardContent>
         </Card>

@@ -1,15 +1,48 @@
+# backend/requirements.txt
+# Install with:  pip install -r requirements.txt --break-system-packages
 
+# Firebase / Firestore
 firebase-admin>=6.5.0
-selenium>=4.20.0
+
+# Google Gemini AI
 google-generativeai>=0.5.2
-beautifulsoup4>=4.12.3
-Pillow>=11.0.0
-requests>=2.31.0
-psutil>=5.9.8
-pyperclip>=1.8.2
+
+# Selenium (browser automation)
+selenium>=4.20.0
+
+# NOTE: webdriver-manager is listed for reference but NOT used on Termux/ARM.
+# On ARM (Android/Termux) the package installs x86_64 chromedriver binaries
+# which will not run. The system chromedriver bundled with `pkg install chromium`
+# is used instead. On x86_64 cloud servers webdriver-manager works fine.
 webdriver-manager>=4.0.1
+
+# HTML parsing
+beautifulsoup4>=4.12.3
+
+# Image processing (Reposter AI caption generation)
+Pillow>=11.0.0
+
+# Video frame extraction (Reposter)
+opencv-python-headless>=4.9.0
+
+# Video downloading (Reposter)
 yt-dlp>=2024.4.9
 static-ffmpeg>=2.7
-tqdm>=4.66.2
+
+# HTTP
+requests>=2.31.0
+
+# Process management (Orchestrator)
+psutil>=5.9.8
+
+# Retry logic
 tenacity>=8.3.0
+
+# Environment variables
 python-dotenv>=1.0.1
+
+# Progress bars (optional, used by yt-dlp)
+tqdm>=4.66.2
+
+# REMOVED: pyperclip — unreliable on headless Termux (no X display / clipboard daemon).
+# Characters are now typed directly via Selenium send_keys() instead.

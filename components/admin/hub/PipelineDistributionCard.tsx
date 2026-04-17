@@ -44,7 +44,7 @@ export const PipelineDistributionCard: React.FC<PipelineDistributionCardProps> =
     }, [contacts, t]);
 
     return (
-        <Card className="bg-card/50 backdrop-blur-md border-border/50 shadow-sm overflow-hidden rounded-[24px] group">
+        <Card className="bg-card/50 backdrop-blur-md border-border/50 shadow-sm overflow-hidden rounded-[24px] group relative z-0">
             <CardHeader className="pb-4 bg-muted/20 border-b border-border/50">
                 <CardTitle className="text-lg font-bold tracking-tight text-foreground">{t('hub.pipelineDistribution.title')}</CardTitle>
             </CardHeader>

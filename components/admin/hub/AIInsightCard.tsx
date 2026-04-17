@@ -1,9 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { DashboardStats, WhatsAppInstance } from '../../../types';
 import { Skeleton } from '../../ui/Skeleton';
 import { useAI } from '../../../contexts/AIContext';
 import { useTranslation } from '../../../contexts/LanguageContext';
+import { cn } from '../../../lib/utils';
 
 const SparklesIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
@@ -16,68 +18,70 @@ interface AIInsightCardProps {
     instances: WhatsAppInstance[];
 }
 
-const INSIGHT_ROTATION_INTERVAL_MS = 10000; // 10 seconds
+const INSIGHT_ROTATION_INTERVAL_MS = 10000;
 
 export const AIInsightCard: React.FC<AIInsightCardProps> = ({ stats, instances }) => {
     const { t } = useTranslation();
     const { insights, isLoadingInsights, fetchInsights } = useAI();
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [isFading, setIsFading] = useState(false);
-    const timeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
-        if (stats) {
-            fetchInsights(stats, instances);
-        }
+        if (stats) fetchInsights(stats, instances);
     }, [stats, instances, fetchInsights]);
     
     useEffect(() => {
         if (insights.length <= 1) return;
-
         const intervalId = setInterval(() => {
-            setIsFading(true);
-            
-            timeoutRef.current = window.setTimeout(() => {
-                setCurrentIndex(prevIndex => (prevIndex + 1) % insights.length);
-                setIsFading(false);
-            }, 300);
-
+            setCurrentIndex(prev => (prev + 1) % insights.length);
         }, INSIGHT_ROTATION_INTERVAL_MS);
-
-        return () => {
-            clearInterval(intervalId);
-            if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-            }
-        };
+        return () => clearInterval(intervalId);
     }, [insights]);
 
-
     return (
-        <div className="xl:col-span-3 p-8 rounded-[32px] bg-gradient-to-br from-indigo-600 via-primary to-violet-600 text-primary-foreground shadow-2xl shadow-primary/30 border border-white/10 min-h-[140px] relative overflow-hidden group">
-            {/* Decorative background elements */}
-            <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white/10 rounded-full blur-[80px] group-hover:bg-white/20 transition-all duration-1000 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-64 h-64 bg-primary-foreground/5 rounded-full blur-[60px] group-hover:bg-primary-foreground/10 transition-all duration-1000 pointer-events-none" />
+        <div className="relative p-10 rounded-[40px] bg-[#0A0A0B] text-white shadow-2xl border border-white/5 min-h-[160px] overflow-hidden group">
+            {/* Mesh Gradient Background */}
+            <div className="absolute inset-0 opacity-40 mix-blend-screen pointer-events-none">
+                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/30 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 animate-pulse" />
+                <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/20 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2" />
+            </div>
             
-            <div className="flex items-start gap-6 relative z-10">
-                <div className="p-3 bg-white/15 rounded-2xl backdrop-blur-md shadow-xl ring-1 ring-white/20 group-hover:scale-110 transition-transform duration-500">
-                    <SparklesIcon className="w-7 h-7 text-white animate-pulse" />
+            <div className="flex items-center gap-8 relative z-10">
+                <div className="relative flex-shrink-0">
+                    <motion.div 
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                        className="absolute inset-0 bg-gradient-to-tr from-primary to-violet-500 rounded-[22px] blur-md opacity-50 group-hover:opacity-100 transition-opacity" 
+                    />
+                    <div className="relative p-4 bg-white/10 rounded-[22px] backdrop-blur-2xl ring-1 ring-white/20 shadow-2xl transition-transform duration-500 group-hover:scale-110">
+                        <SparklesIcon className="w-8 h-8 text-white" />
+                    </div>
                 </div>
-                <div className="flex-1 pt-1">
-                    <h3 className="font-bold text-xl tracking-tight mb-2 opacity-90">{t('hub.insights.title')}</h3>
+                
+                <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-3">
+                        <h3 className="font-black text-xs uppercase tracking-[0.3em] text-white/40">{t('hub.insights.title')}</h3>
+                        <div className="h-px flex-1 bg-white/5" />
+                    </div>
+                    
                     {isLoadingInsights ? (
-                        <div className="space-y-3 mt-3">
-                             <Skeleton className="h-4 w-3/4 bg-white/15 rounded-full" />
-                             <Skeleton className="h-4 w-1/2 bg-white/15 rounded-full" />
+                        <div className="space-y-3 mt-4">
+                             <Skeleton className="h-5 w-3/4 bg-white/5 rounded-full" />
+                             <Skeleton className="h-5 w-1/2 bg-white/5 rounded-full" />
                         </div>
                     ) : (
-                        <div className="relative h-12">
-                            <p 
-                                className={`text-white/95 text-[15px] leading-relaxed font-medium transition-all duration-500 ease-in-out absolute inset-0 ${isFading ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}
-                                key={currentIndex}
-                            >
-                                {insights[currentIndex] || t('hub.insights.default')}
-                            </p>
+                        <div className="relative min-h-[50px] flex items-center">
+                            <AnimatePresence mode="wait">
+                                <motion.p 
+                                    key={currentIndex}
+                                    initial={{ opacity: 0, y: 10, filter: 'blur(10px)' }}
+                                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                                    exit={{ opacity: 0, y: -10, filter: 'blur(10px)' }}
+                                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                                    className="text-white/90 text-lg leading-relaxed font-bold tracking-tight italic"
+                                >
+                                    “{insights[currentIndex] || t('hub.insights.default')}”
+                                </motion.p>
+                            </AnimatePresence>
                         </div>
                     )}
                 </div>
@@ -85,11 +89,15 @@ export const AIInsightCard: React.FC<AIInsightCardProps> = ({ stats, instances }
 
             {/* Pagination dots */}
             {!isLoadingInsights && insights.length > 1 && (
-                <div className="absolute bottom-4 right-8 flex gap-1.5">
+                <div className="absolute bottom-6 right-10 flex gap-2">
                     {insights.map((_, i) => (
-                        <div 
+                        <button 
                             key={i} 
-                            className={`h-1.5 rounded-full transition-all duration-500 ${i === currentIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/30'}`}
+                            onClick={() => setCurrentIndex(i)}
+                            className={cn(
+                                "h-1 rounded-full transition-all duration-700 outline-none", 
+                                i === currentIndex ? 'w-8 bg-primary shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'w-2 bg-white/10 hover:bg-white/30'
+                            )}
                         />
                     ))}
                 </div>
