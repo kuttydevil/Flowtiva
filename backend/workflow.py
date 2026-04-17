@@ -12,7 +12,12 @@ try:
 except ValueError:
     pass
 
-db = firestore.client()
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+db_id = os.getenv("FIRESTORE_DATABASE_ID")
+db = firestore.client(database_id=db_id) if db_id else firestore.client()
 
 # Import tools that workflows can execute
 import tools

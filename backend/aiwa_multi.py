@@ -77,7 +77,9 @@ try:
 except ValueError:
     pass
 
-db = firestore.client()
+import os
+db_id = os.getenv("FIRESTORE_DATABASE_ID")
+db = firestore.client(database_id=db_id) if db_id else firestore.client()
 
 # --- DATABASE LOGGING ---
 def log_to_db(level: str, message: str, instance_id_str: str = instance_id):

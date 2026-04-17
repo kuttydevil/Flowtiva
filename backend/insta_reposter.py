@@ -71,7 +71,9 @@ try:
         firebase_admin.initialize_app()
     except ValueError:
         pass
-    db = firestore.client()
+    import os
+    db_id = os.getenv("FIRESTORE_DATABASE_ID")
+    db = firestore.client(database_id=db_id) if db_id else firestore.client()
     genai.configure(api_key=GEMINI_API_KEY)
     print(f"[{WORKER_ID}] SaaS Reposter Engine initialized.")
 except Exception as e:

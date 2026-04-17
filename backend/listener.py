@@ -52,13 +52,16 @@ try:
 except ValueError:
     pass  # Already initialized
 
+import os
+
 @retry(
     wait=wait_exponential(multiplier=1, min=2, max=10),
     stop=stop_after_attempt(5)
 )
 def get_db_client() -> Client:
     """Returns the Firestore client with exponential backoff on failure."""
-    return firestore.client()
+    db_id = os.getenv("FIRESTORE_DATABASE_ID")
+    return firestore.client(database_id=db_id) if db_id else firestore.client()
 
 db: Client = get_db_client()
 RECONCILE_INTERVAL: int = 15  # seconds

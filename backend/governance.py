@@ -13,7 +13,12 @@ try:
 except ValueError:
     pass
 
-db = firestore.client()
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+db_id = os.getenv("FIRESTORE_DATABASE_ID")
+db = firestore.client(database_id=db_id) if db_id else firestore.client()
 
 # Mirroring frontend aiPolicy
 AI_POLICY = {
