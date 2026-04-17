@@ -2,8 +2,7 @@
 # backend/insta_multi.py.txt
 # This worker is controlled by an external orchestrator (listener.py).
 import warnings
-# Suppress noisy deprecation warnings from the legacy SDK
-warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+warnings.simplefilter('ignore', FutureWarning)
 
 import sys
 import time

@@ -18,8 +18,7 @@
 #    - `pip install supabase selenium google-generativeai beautifulsoup4 Pillow requests psutil`
 # 4. In some setups, you may need to run `chromedriver` in a separate session.
 import warnings
-# Suppress noisy deprecation warnings from the legacy SDK
-warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+warnings.simplefilter('ignore', FutureWarning)
 
 import sys
 import time
@@ -40,25 +39,6 @@ from typing import Any, Optional, Tuple, Dict, List
 from tenacity import retry, wait_exponential, stop_after_attempt
 from dotenv import load_dotenv
 
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import (
-    NoSuchElementException, InvalidSelectorException, ElementNotInteractableException,
-    WebDriverException, StaleElementReferenceException, JavascriptException, TimeoutException
-)
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-
-import google.generativeai as genai
-from google.api_core.exceptions import ServiceUnavailable
-from google.generativeai.types import HarmCategory, HarmBlockThreshold, generation_types
-
-from bs4 import BeautifulSoup
-
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -74,7 +54,6 @@ WORKER_HOSTNAME = socket.gethostname()
 WORKER_ID = f"Worker-{instance_id[:6]}-{WORKER_PID}"
 
 # --- FIREBASE CONFIG ---
-from dotenv import load_dotenv
 load_dotenv()
 
 try:
@@ -82,7 +61,6 @@ try:
 except ValueError:
     pass
 
-import os
 db_id = os.getenv("FIRESTORE_DATABASE_ID")
 db = firestore.client(database_id=db_id) if db_id else firestore.client()
 
@@ -99,9 +77,52 @@ def log_to_db(level: str, message: str, instance_id_str: str = instance_id):
     except Exception as e:
         print(f"[DB_LOG_FAIL] Original: [{level.upper()}] {message} | Error: {e}")
 
-
 print(f"🤖 [{WORKER_ID}] Booting up on host {WORKER_HOSTNAME}...")
-log_to_db('INFO', f"Worker process {WORKER_PID} booting up on host {WORKER_HOSTNAME}.")
+log_to_db('INFO', f"Worker process {WORKER_PID} booting up.")
+
+# --- FETCH CONFIG FROM DB & CLAIM INSTANCE (FAST TRACK) ---
+try:
+    doc_ref = db.collection("whatsapp_instances").document(instance_id)
+    doc = doc_ref.get()
+    
+    if not doc.exists:
+        raise Exception("No configuration found for this instance ID.")
+    
+    config = doc.to_dict()
+    if not config.get('isActive'):
+        print("Instance is disabled. Exiting.")
+        sys.exit(0)
+
+    # Claim IMMEDIATELY before loading heavy libraries
+    doc_ref.update({
+        "status": "linking",
+        "worker_hostname": WORKER_HOSTNAME,
+        "worker_pid": WORKER_PID,
+        "last_heartbeat": firestore.SERVER_TIMESTAMP,
+        "last_error": None
+    })
+except Exception as e:
+    print(f"Failed during early claim: {e}")
+    sys.exit(1)
+
+# --- HEAVY IMPORTS (DEFERRED) ---
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import (
+    NoSuchElementException, InvalidSelectorException, ElementNotInteractableException,
+    WebDriverException, StaleElementReferenceException, JavascriptException, TimeoutException
+)
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+import google.generativeai as genai
+from google.api_core.exceptions import ServiceUnavailable
+from google.generativeai.types import HarmCategory, HarmBlockThreshold, generation_types
+
+from bs4 import BeautifulSoup
 
 
 # --- BEHAVIORAL CONFIGURATION ---
@@ -137,19 +158,9 @@ def heartbeat_thread(stop_event: threading.Event):
         stop_event.wait(HEARTBEAT_INTERVAL)
     log_to_db("DEBUG", "Heartbeat thread stopped.")
 
-# --- FETCH CONFIG FROM DB & CLAIM INSTANCE ---
+# --- PREPARE RUNTIME CONFIG ---
 try:
-    log_to_db("INFO", "Fetching configuration from database.")
-    doc_ref = db.collection("whatsapp_instances").document(instance_id)
-    doc = doc_ref.get()
-    
-    if not doc.exists:
-        raise Exception("No configuration found for this instance ID.")
-    
-    config = doc.to_dict()
-    
     phone_number_to_input = re.sub(r'\D', '', config['phoneNumber'])
-    
     user_prompt = config['customPrompt']
     user_context = config.get('context')
     if user_context and user_context.strip():
@@ -158,24 +169,8 @@ try:
         system_prompt_reply = user_prompt
         
     enabled_tools = config.get('enabled_tools') or []
-    
-    if not config['isActive']:
-        log_to_db("INFO", "Instance is disabled (isActive=false). Exiting before claim.")
-        sys.exit(0)
 
-    log_to_db("INFO", f"Attempting to claim instance for phone: +{phone_number_to_input}")
-    
-    # Atomic claim using transaction or simple update if we assume listener manages locks
-    # For simplicity, we'll use update with a check (though Firestore update doesn't have .eq like Supabase)
-    # We'll just update and check if it was successful in our context
-    doc_ref.update({
-        "status": "linking",
-        "worker_hostname": WORKER_HOSTNAME,
-        "worker_pid": WORKER_PID,
-        "last_heartbeat": firestore.SERVER_TIMESTAMP,
-        "last_error": None
-    })
-
+    # Configuration is ready
 except Exception as e:
     error_message = f"Failed during startup/claim: {e}"
     log_to_db("FATAL", error_message)

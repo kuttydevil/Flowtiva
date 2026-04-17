@@ -1,11 +1,11 @@
 
 import warnings
-# Suppress noisy deprecation warnings from the legacy SDK
-warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+warnings.simplefilter('ignore', FutureWarning)
 
-import os
+import sys
 import time
 import json
+import os
 import shutil
 import random
 import requests
@@ -21,7 +21,6 @@ from datetime import datetime, timezone
 from tenacity import retry, wait_exponential, stop_after_attempt
 from dotenv import load_dotenv
 
-# Firebase & Generative AI
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter

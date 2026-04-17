@@ -4,6 +4,8 @@
 
 import os
 import sys
+import warnings
+warnings.simplefilter('ignore', FutureWarning)
 import time
 import signal
 import psutil
@@ -65,8 +67,8 @@ def get_db_client() -> Client:
     return firestore.client(database_id=db_id) if db_id else firestore.client()
 
 db: Client = get_db_client()
-RECONCILE_INTERVAL: int = 15  # seconds
-HEARTBEAT_THRESHOLD: int = 120 # seconds
+RECONCILE_INTERVAL: int = 30  # seconds - increased for mobile stability
+HEARTBEAT_THRESHOLD: int = 150 # seconds
 AIWA_SCRIPT: str = os.path.join(os.path.dirname(__file__), "aiwa_multi.py")
 INSTA_SCRIPT: str = os.path.join(os.path.dirname(__file__), "insta_multi.py")
 REPOSTER_SCRIPT: str = os.path.join(os.path.dirname(__file__), "insta_reposter.py")
@@ -218,9 +220,28 @@ def reconcile_workers() -> None:
                 instance = doc.to_dict()
                 instance_id = doc.id
                 pid = instance.get('worker_pid')
+                hostname = instance.get('worker_hostname')
                 
-                if not pid or (instance.get('worker_hostname') == LISTENER_HOSTNAME and not is_process_running(pid)):
+                # REFINEMENT: If it has a PID, check if it's REALLY running on this host.
+                is_running_here = False
+                if pid and hostname == LISTENER_HOSTNAME:
+                    is_running_here = is_process_running(pid)
+                    if not is_running_here:
+                        logger.info(f"Instance {instance_id} has PID {pid} but it's NOT running. Re-launching.")
+                elif pid:
+                    # It has a PID but on a different host (or hostname is None)
+                    # For Termux Enterprise, we assume one host.
+                    is_running_here = False
+                
+                if not pid:
+                    logger.info(f"Instance {instance_id} has no worker_pid. Starting.")
                     start_worker_process(instance_id, script)
+                elif not is_running_here:
+                    logger.info(f"Instance {instance_id} PID {pid} is NOT running on {LISTENER_HOSTNAME}. Starting.")
+                    start_worker_process(instance_id, script)
+                else:
+                    # It's running, all good.
+                    pass
     except Exception as e:
         logger.error(f"Reconciliation error: {e}", exc_info=True)
 
