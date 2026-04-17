@@ -238,7 +238,7 @@ class GeminiService {
     
     startChat(): Chat {
         const chat: Chat = this.ai.chats.create({
-            model: 'gemma-3-27b-it',
+            model: 'gemini-3.1-pro-preview',
             config: {
                 systemInstruction: systemPrompt,
                 safetySettings: this.safetySettings,
@@ -283,7 +283,7 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
 
         try {
             const response: GenerateContentResponse = await this.ai.models.generateContent({
-                model: 'gemma-3-27b-it',
+                model: 'gemini-3.1-pro-preview',
                 contents: systemInstruction,
                 config: {
                     responseMimeType: "application/json",
@@ -334,7 +334,7 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
         
         try {
             const response: GenerateContentResponse = await this.ai.models.generateContent({
-                model: 'gemma-3-27b-it',
+                model: 'gemini-3.1-pro-preview',
                 contents: constructedPrompt,
                 config: {
                     safetySettings: this.safetySettings
@@ -362,7 +362,7 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
         
         try {
             const response: GenerateContentResponse = await this.ai.models.generateContent({
-                model: 'gemma-3-27b-it',
+                model: 'gemini-3.1-pro-preview',
                 contents: fullPrompt,
                 config: {
                     responseMimeType: "application/json",
@@ -404,11 +404,10 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
 
         try {
             const response = await this.ai.models.generateContent({
-                model: 'gemma-3-27b-it',
+                model: 'gemini-3.1-pro-preview',
                 contents: systemInstruction,
                 config: {
-                    tools: [{ functionDeclarations: [createWorkflowFunctionDeclaration] }],
-                    thinkingConfig: { thinkingBudget: 1024 } // Reduced thinking budget slightly for 27B model
+                    tools: [{ functionDeclarations: [createWorkflowFunctionDeclaration] }]
                 }
             });
 
@@ -463,7 +462,7 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
 
         try {
             const response = await this.ai.models.generateContent({
-                model: 'gemma-3-27b-it',
+                model: 'gemini-3.1-pro-preview',
                 contents: context,
                 config: {
                     responseMimeType: "application/json",
