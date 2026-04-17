@@ -24,9 +24,10 @@ const StatusIndicator: React.FC<{ status: WhatsAppInstanceStatus }> = ({ status 
         [WhatsAppInstanceStatus.Failed]: { dot: 'bg-status-red', text: 'text-status-red', title: t('hub.instanceCard.tooltips.failed') },
         [WhatsAppInstanceStatus.Stopped]: { dot: 'bg-status-red', text: 'text-status-red', title: t('hub.instanceCard.tooltips.stopped') },
     };
-    const currentStyle = styles[status];
+    const currentStyle = styles[status] || { dot: 'bg-gray-400', text: 'text-gray-400', title: 'Unknown' };
     // Map status key to translation
-    const statusLabel = t(`hub.instanceCard.status.${status.toLowerCase()}`);
+    const statusKey = status ? status.toLowerCase() : 'unknown';
+    const statusLabel = t(`hub.instanceCard.status.${statusKey}`);
 
     return (
         <div className="flex items-center gap-2" title={currentStyle.title}>
