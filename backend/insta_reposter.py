@@ -157,7 +157,7 @@ def generate_viral_caption(video_path, niche, tone, cta):
         print(f"[{WORKER_ID}] Warning: No frames extracted. Caption will be generic.")
 
     model = genai.GenerativeModel(
-        model_name="gemma-3-27b-it", 
+        model_name="gemini-2.0-flash", 
         generation_config={
             "temperature": 0.8,
             "top_p": 0.95,

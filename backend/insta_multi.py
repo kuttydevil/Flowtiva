@@ -150,8 +150,8 @@ try:
         HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
         HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
     }
-    extraction_model = genai.GenerativeModel(model_name="gemma-3-27b-it", generation_config=generation_config, safety_settings=safety_settings)
-    reply_model = genai.GenerativeModel(model_name="gemma-3-27b-it", system_instruction=system_prompt, generation_config=generation_config, safety_settings=safety_settings)
+    extraction_model = genai.GenerativeModel(model_name="gemini-2.0-flash", generation_config=generation_config, safety_settings=safety_settings)
+    reply_model = genai.GenerativeModel(model_name="gemini-2.0-flash", system_instruction=system_prompt, generation_config=generation_config, safety_settings=safety_settings)
     log_to_db("INFO", "Gemini AI models configured successfully.")
 except Exception as e:
     error_message = f"Failed to configure Gemini: {e}"

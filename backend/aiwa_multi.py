@@ -259,7 +259,7 @@ try:
     tools_for_this_instance = [ALL_TOOLS_DEFINITIONS[tool_name] for tool_name in enabled_tools if tool_name in ALL_TOOLS_DEFINITIONS]
     
     jayakrishnan_reply_model = genai.GenerativeModel(
-        model_name="gemma-3-27b-it", # Switched to Gemma 3 27B
+        model_name="gemini-2.0-flash", 
         system_instruction=system_prompt_reply,
         safety_settings=safety_settings,
         tools=tools_for_this_instance if tools_for_this_instance else None
@@ -267,7 +267,7 @@ try:
     log_to_db("INFO", f"Reply model initialized with {len(tools_for_this_instance)} tools enabled.")
 
     outreach_model = genai.GenerativeModel(
-        model_name="gemma-3-27b-it", # Switched to Gemma 3 27B
+        model_name="gemini-2.0-flash", 
         system_instruction="""
         You are a message personalization AI. Your task is to take a user-provided template and a set of variables and craft a natural, human-sounding WhatsApp message.
 

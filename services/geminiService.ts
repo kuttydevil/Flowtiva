@@ -238,7 +238,7 @@ class GeminiService {
     
     startChat(): Chat {
         const chat: Chat = this.ai.chats.create({
-            model: 'gemini-3.1-pro-preview',
+            model: 'gemini-2.0-flash',
             config: {
                 systemInstruction: systemPrompt,
                 safetySettings: this.safetySettings,
@@ -283,7 +283,7 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
 
         try {
             const response: GenerateContentResponse = await this.ai.models.generateContent({
-                model: 'gemini-3.1-pro-preview',
+                model: 'gemini-2.0-flash',
                 contents: systemInstruction,
                 config: {
                     responseMimeType: "application/json",
@@ -334,7 +334,7 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
         
         try {
             const response: GenerateContentResponse = await this.ai.models.generateContent({
-                model: 'gemini-3.1-pro-preview',
+                model: 'gemini-2.0-flash',
                 contents: constructedPrompt,
                 config: {
                     safetySettings: this.safetySettings
@@ -362,7 +362,7 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
         
         try {
             const response: GenerateContentResponse = await this.ai.models.generateContent({
-                model: 'gemini-3.1-pro-preview',
+                model: 'gemini-2.0-flash',
                 contents: fullPrompt,
                 config: {
                     responseMimeType: "application/json",
@@ -404,7 +404,7 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
 
         try {
             const response = await this.ai.models.generateContent({
-                model: 'gemini-3.1-pro-preview',
+                model: 'gemini-2.0-flash',
                 contents: systemInstruction,
                 config: {
                     tools: [{ functionDeclarations: [createWorkflowFunctionDeclaration] }]
@@ -462,7 +462,7 @@ Example: ["Insight 1.", "Insight 2.", "Another useful tip."]
 
         try {
             const response = await this.ai.models.generateContent({
-                model: 'gemini-3.1-pro-preview',
+                model: 'gemini-2.0-flash',
                 contents: context,
                 config: {
                     responseMimeType: "application/json",
