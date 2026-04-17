@@ -34,6 +34,7 @@ import socket
 import threading
 from typing import Any, Optional, Tuple, Dict, List
 from tenacity import retry, wait_exponential, stop_after_attempt
+from dotenv import load_dotenv
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -68,6 +69,9 @@ WORKER_HOSTNAME = socket.gethostname()
 WORKER_ID = f"Worker-{instance_id[:6]}-{WORKER_PID}"
 
 # --- FIREBASE CONFIG ---
+from dotenv import load_dotenv
+load_dotenv()
+
 try:
     firebase_admin.initialize_app()
 except ValueError:
@@ -171,7 +175,8 @@ except Exception as e:
     sys.exit(1)
 
 # --- GEMINI CONFIG & FUNCTION CALLING DEFINITIONS ---
-GEMINI_API_KEY = ("AIzaSyALWsDj4gj7YqcwZojaHqv-IQ0CWC-eq8s")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 # Tool definitions
 update_crm_stage = genai.protos.FunctionDeclaration(
     name='update_crm_stage',

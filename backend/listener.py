@@ -18,6 +18,10 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.client import Client
 import requests
+from dotenv import load_dotenv
+
+# Load enterprise env variables
+load_dotenv()
 
 # --- ENTERPRISE LOGGING SETUP ---
 logging.basicConfig(

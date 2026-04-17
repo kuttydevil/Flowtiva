@@ -15,6 +15,7 @@ import traceback
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from tenacity import retry, wait_exponential, stop_after_attempt
+from dotenv import load_dotenv
 
 # Firebase & Generative AI
 import firebase_admin
@@ -38,7 +39,7 @@ import yt_dlp
 import pyperclip
 
 # --- CONFIGURATION (SaaS Mode) ---
-GEMINI_API_KEY = "AIzaSyALWsDj4gj7YqcwZojaHqv-IQ0CWC-eq8s" 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
 
 WORKER_ID = f"Reposter-{socket.gethostname()}-{os.getpid()}"
 OUTPUT_FOLDER = "temp_reels_download"
@@ -65,6 +66,7 @@ SELECTORS = {
 
 # Initialize Clients
 try:
+    load_dotenv()
     try:
         firebase_admin.initialize_app()
     except ValueError:

@@ -16,6 +16,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt
 import requests
 import zipfile
 import stat
+from dotenv import load_dotenv
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -48,6 +49,9 @@ WORKER_HOSTNAME = socket.gethostname()
 WORKER_ID = f"InstaWorker-{instance_id[:6]}-{WORKER_PID}"
 
 # --- FIREBASE CONFIG ---
+from dotenv import load_dotenv
+load_dotenv()
+
 try:
     firebase_admin.initialize_app()
 except ValueError:
@@ -129,7 +133,7 @@ except Exception as e:
     sys.exit(1)
 
 # --- GEMINI CONFIGURATION ---
-GEMINI_API_KEY = "AIzaSyD3jvg-7fU1nIKM54IBAn3nqBF2mJGl0XA"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     generation_config = {"temperature": 0.7, "top_p": 1.0, "top_k": 32, "max_output_tokens": 8192, "response_mime_type": "text/plain"}
