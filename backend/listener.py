@@ -17,6 +17,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.client import Client
+from google.cloud.firestore_v1.base_query import FieldFilter
 import requests
 from dotenv import load_dotenv
 
@@ -123,11 +124,21 @@ def start_worker_process(instance_id: str, script_path: str, is_reposter: bool =
     
     logger.info(f"Launching {os.path.basename(script_path)} for ID {instance_id}")
     try:
-        subprocess.Popen(
+        proc = subprocess.Popen(
             [sys.executable, script_path, instance_id],
             stdout=sys.stdout,
             stderr=sys.stderr
         )
+        # Update DB immediately with the PID to prevent orchestrator from launching another before the script claims it.
+        if not is_reposter:
+            try:
+                update_instance_status(table_name, instance_id, {
+                    "worker_pid": proc.pid,
+                    "worker_hostname": LISTENER_HOSTNAME,
+                    "status": "booting"
+                })
+            except Exception as e:
+                logger.error(f"Failed to set initial PID for {instance_id}: {e}")
     except Exception as e:
         logger.error(f"FAILED to launch worker {instance_id}: {e}", exc_info=True)
         if not is_reposter:
@@ -163,9 +174,9 @@ def fetch_workers(collection_name: str, query_filter: Dict[str, Any]) -> List[An
     query = ref
     for key, val in query_filter.items():
         if isinstance(val, dict) and "in" in val:
-            query = query.where(key, "in", val["in"])
+            query = query.where(filter=FieldFilter(key, "in", val["in"]))
         else:
-            query = query.where(key, "==", val)
+            query = query.where(filter=FieldFilter(key, "==", val))
     return list(query.get())
 
 def reconcile_workers() -> None:

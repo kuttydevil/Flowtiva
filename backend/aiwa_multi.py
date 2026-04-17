@@ -17,6 +17,10 @@
 # 3. Python dependencies:
 #    - `pip install supabase selenium google-generativeai beautifulsoup4 Pillow requests psutil`
 # 4. In some setups, you may need to run `chromedriver` in a separate session.
+import warnings
+# Suppress noisy deprecation warnings from the legacy SDK
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
 import sys
 import time
 import json
@@ -57,6 +61,7 @@ from bs4 import BeautifulSoup
 
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 # --- SCRIPT INITIALIZATION ---
 if len(sys.argv) < 2:
@@ -297,8 +302,8 @@ def get_history_from_db(instance_id_str, contact_name_str):
     history = []
     try:
         messages_ref = db.collection("whatsapp_messages")
-        query = messages_ref.where("instanceId", "==", instance_id_str) \
-            .where("contactName", "==", contact_name_str) \
+        query = messages_ref.where(filter=FieldFilter("instanceId", "==", instance_id_str)) \
+            .where(filter=FieldFilter("contactName", "==", contact_name_str)) \
             .order_by("timestamp", direction=firestore.Query.ASCENDING)
         
         docs = query.get()
@@ -357,8 +362,8 @@ def update_contact_tags_in_db(instance_id_str, contact_name_str, new_tags_list):
         return False
     try:
         profiles_ref = db.collection("whatsapp_contact_profiles")
-        query = profiles_ref.where("instance_id", "==", instance_id_str) \
-            .where("contact_name", "==", contact_name_str) \
+        query = profiles_ref.where(filter=FieldFilter("instance_id", "==", instance_id_str)) \
+            .where(filter=FieldFilter("contact_name", "==", contact_name_str)) \
             .limit(1)
         
         docs = query.get()
@@ -606,8 +611,8 @@ def poll_and_send_outgoing_messages(driver, instance_id_str):
     messages_to_send = []
     try:
         messages_ref = db.collection("whatsapp_messages")
-        query = messages_ref.where("instanceId", "==", instance_id_str) \
-            .where("status", "==", "sending") \
+        query = messages_ref.where(filter=FieldFilter("instanceId", "==", instance_id_str)) \
+            .where(filter=FieldFilter("status", "==", "sending")) \
             .order_by("timestamp", direction=firestore.Query.ASCENDING)
         
         docs = query.get()
@@ -869,8 +874,8 @@ def run_whatsapp_automation():
                     existing_chat_history = get_history_from_db(instance_id, contact_name)
                     try:
                         docs = db.collection("whatsapp_messages") \
-                            .where("instanceId", "==", instance_id) \
-                            .where("contactName", "==", contact_name) \
+                            .where(filter=FieldFilter("instanceId", "==", instance_id)) \
+                            .where(filter=FieldFilter("contactName", "==", contact_name)) \
                             .get()
                         existing_wa_ids = {doc.to_dict().get('wa_message_id') for doc in docs if doc.to_dict().get('wa_message_id')}
                     except Exception as e:

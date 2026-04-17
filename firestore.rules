@@ -105,6 +105,13 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    match /whatsapp_linking_codes/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /linking_codes/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
     match /{path=**} {
       allow read, write: if false;
     }

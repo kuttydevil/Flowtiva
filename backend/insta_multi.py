@@ -1,6 +1,10 @@
 
 # backend/insta_multi.py.txt
 # This worker is controlled by an external orchestrator (listener.py).
+import warnings
+# Suppress noisy deprecation warnings from the legacy SDK
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
 import sys
 import time
 import json
@@ -37,6 +41,7 @@ from bs4 import BeautifulSoup
 
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 # --- SCRIPT INITIALIZATION ---
 if len(sys.argv) < 2:
@@ -161,8 +166,8 @@ except Exception as e:
 def get_history_from_db(contact_username: str) -> List[Dict]:
     try:
         res = db.collection("instagram_messages") \
-            .where("instance_id", "==", instance_id) \
-            .where("contact_username", "==", contact_username) \
+            .where(filter=FieldFilter("instance_id", "==", instance_id)) \
+            .where(filter=FieldFilter("contact_username", "==", contact_username)) \
             .order_by("timestamp", direction=firestore.Query.ASCENDING) \
             .get()
         history = []

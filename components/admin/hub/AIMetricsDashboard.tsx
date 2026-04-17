@@ -178,7 +178,7 @@ export const AIMetricsDashboard: React.FC = () => {
                                                 <DocumentTextIcon className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                                             </div>
                                             <div>
-                                                <p className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">{report.period.charAt(0).toUpperCase() + report.period.slice(1)} Report - {new Date(report.created_at).toLocaleDateString()}</p>
+                                                <p className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">{String(report.period || '').charAt(0).toUpperCase() + String(report.period || '').slice(1)} Report - {new Date(report.created_at).toLocaleDateString()}</p>
                                                 <p className="text-xs text-muted-foreground mt-0.5">Click to view summary</p>
                                             </div>
                                         </button>

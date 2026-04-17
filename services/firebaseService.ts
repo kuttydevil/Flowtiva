@@ -818,14 +818,24 @@ export const firebaseService = {
 
   async getLatestLinkingCode(instanceId: string) {
     try {
-      const q = query(collection(db, 'linking_codes'), where('instanceId', '==', instanceId), orderBy('createdAt', 'desc'), limit(1));
+      const q = query(
+        collection(db, 'whatsapp_linking_codes'), 
+        where('instance_id', '==', instanceId), 
+        orderBy('created_at', 'desc'), 
+        limit(1)
+      );
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
-        return snapshot.docs[0].data() as WhatsAppLinkingCode;
+        const data = snapshot.docs[0].data();
+        return {
+          instanceId: data.instance_id,
+          code: data.code,
+          createdAt: data.created_at?.toDate?.()?.toISOString() || data.created_at
+        } as WhatsAppLinkingCode;
       }
       return null;
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'linking_codes');
+      handleFirestoreError(error, OperationType.GET, 'whatsapp_linking_codes');
       return null;
     }
   },

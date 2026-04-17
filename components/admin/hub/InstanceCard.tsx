@@ -119,7 +119,7 @@ export const InstanceCard: React.FC<InstanceCardProps> = ({ instance, onToggle, 
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-[16px] bg-primary/10 flex items-center justify-center text-primary font-bold text-xl shadow-sm ring-1 ring-primary/20">
-                            {(instance.name || 'I').charAt(0).toUpperCase()}
+                            {String(instance?.name || 'I').charAt(0).toUpperCase()}
                         </div>
                         <div>
                             <h3 className="font-semibold text-foreground text-base tracking-tight">{instance.name || 'Instance'}</h3>

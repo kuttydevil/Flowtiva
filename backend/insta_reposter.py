@@ -1,4 +1,8 @@
 
+import warnings
+# Suppress noisy deprecation warnings from the legacy SDK
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
 import os
 import time
 import json
@@ -20,6 +24,7 @@ from dotenv import load_dotenv
 # Firebase & Generative AI
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 import google.generativeai as genai
 from google.api_core.exceptions import ServiceUnavailable, DeadlineExceeded
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
@@ -376,7 +381,7 @@ def process_job(job):
                 # 5. Deduplicate
                 reel_id = link.rstrip('/').split('/')[-1]
                 ledger_ref = db.collection("instagram_reposter_ledger")
-                query = ledger_ref.where("job_id", "==", job['id']).where("reel_id", "==", reel_id).limit(1)
+                query = ledger_ref.where(filter=FieldFilter("job_id", "==", job['id'])).where(filter=FieldFilter("reel_id", "==", reel_id)).limit(1)
                 existing = query.get()
                 
                 if existing:
@@ -447,7 +452,7 @@ def main_loop():
                 pass
                 
             jobs_ref = db.collection("instagram_reposter_jobs")
-            query = jobs_ref.where("status", "==", "active")
+            query = jobs_ref.where(filter=FieldFilter("status", "==", "active"))
             docs = query.get()
             
             jobs = [{"id": doc.id, **doc.to_dict()} for doc in docs]
