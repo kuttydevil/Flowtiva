@@ -12,6 +12,7 @@ import signal
 import socket
 import threading
 from typing import Optional, Dict, List
+from tenacity import retry, wait_exponential, stop_after_attempt
 import requests
 import zipfile
 import stat
@@ -150,6 +151,7 @@ except Exception as e:
 
 
 # --- DATABASE HELPERS ---
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
 def get_history_from_db(contact_username: str) -> List[Dict]:
     try:
         res = db.collection("instagram_messages") \
@@ -167,6 +169,7 @@ def get_history_from_db(contact_username: str) -> List[Dict]:
         log_to_db("ERROR", f"Error fetching history for {contact_username}: {e}")
         return []
 
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
 def save_message_to_db(contact_username: str, sender: str, text: str):
     try:
         db_sender = 'ai' if sender == 'model' else sender
@@ -235,9 +238,25 @@ def run_instagram_automation():
         service = Service(executable_path=chromedriver_path)
 
         chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--headless=new')
+        
+        # IMPROVEMENT 2: Anti-Ban IP Proxy Configuration
+        proxy_server = os.getenv("PROXY_SERVER", "")
+        if proxy_server:
+            chrome_options.add_argument(f'--proxy-server={proxy_server}')
+            log_to_db("INFO", "Masking traffic through proxy...")
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument("--metrics-recording-only")
+        chrome_options.add_argument("--mute-audio")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--no-default-browser-check")
+        chrome_options.add_argument("--disable-application-cache")
+        # Block images and heavy media to conserve RAM on termux
+        chrome_options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
+        chrome_options.page_load_strategy = "eager"
         chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36")
         
         session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instagram_sessions", instance_id)

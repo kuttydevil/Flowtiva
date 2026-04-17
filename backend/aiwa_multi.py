@@ -33,6 +33,7 @@ import stat
 import socket
 import threading
 from typing import Any, Optional, Tuple, Dict, List
+from tenacity import retry, wait_exponential, stop_after_attempt
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -284,6 +285,7 @@ except Exception as e:
     sys.exit(1)
 
 # --- DATABASE INTERACTION REFACTOR (Functions are mostly unchanged) ---
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
 def get_history_from_db(instance_id_str, contact_name_str):
     history = []
     try:
@@ -322,6 +324,7 @@ def get_history_from_db(instance_id_str, contact_name_str):
         log_to_db("ERROR", f"Error fetching history from DB for contact {contact_name_str}: {e}")
         return []
 
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
 def save_message_to_db(instance_id_str, contact_name_str, sender_str, message_text_str=None, media_url_str=None, wa_message_id_str=None):
     db_sender = 'ai' if sender_str == 'model' else sender_str
     is_read = (db_sender != 'user')
@@ -341,6 +344,7 @@ def save_message_to_db(instance_id_str, contact_name_str, sender_str, message_te
         log_to_db("ERROR", f"FAILED to save message to DB for contact {contact_name_str}: {e}")
         return False
 
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
 def update_contact_tags_in_db(instance_id_str, contact_name_str, new_tags_list):
     if not new_tags_list:
         return False
@@ -706,12 +710,28 @@ def run_whatsapp_automation():
         chrome_options.add_argument("--force-device-scale-factor=0.5")
         chrome_options.add_experimental_option('prefs', {'intl.accept_languages': 'en-US,en'})
 
-        # Standard operational options
+        # IMPROVEMENT 1: Extreme Memory Optimization for Termux/Mobile
+        chrome_options.add_argument("--headless=new")
+        
+        # IMPROVEMENT 2: Anti-Ban IP Proxy Configuration
+        proxy_server = os.getenv("PROXY_SERVER", "")
+        if proxy_server:
+            chrome_options.add_argument(f'--proxy-server={proxy_server}')
+            log_to_db("INFO", "Masking traffic through proxy...")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--remote-debugging-port=0')
         chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument("--metrics-recording-only")
+        chrome_options.add_argument("--mute-audio")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--no-default-browser-check")
+        chrome_options.add_argument("--disable-application-cache")
+        # Block images and heavy media
+        chrome_options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
+        chrome_options.page_load_strategy = "eager"
         
         session_path = os.path.join(SESSION_BASE_FOLDER, instance_id)
         os.makedirs(session_path, exist_ok=True)

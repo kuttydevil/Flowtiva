@@ -1,7 +1,6 @@
-
 # backend/listener.py
 # A stateless, self-healing orchestrator for managing workers.
-# ROBUSTNESS LEVEL: HIGH (Self-healing, Zombie Cleanup, Connection Retries)
+# ROBUSTNESS LEVEL: ENTERPRISE (Self-healing, Logging, Backoff, Typing)
 
 import os
 import sys
@@ -9,246 +8,253 @@ import time
 import signal
 import psutil
 import socket
+import logging
 import subprocess
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.client import Client
+import requests
+
+# --- ENTERPRISE LOGGING SETUP ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] [%(name)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("Listener")
+
+# --- ALERTING CONFIGURATION ---
+ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "") # Add your Discord/Telegram Webhook URL to .env
+
+def send_alert(message: str) -> None:
+    """Sends a critical alert to the configured webhook."""
+    if not ALERT_WEBHOOK_URL:
+        return
+    try:
+        requests.post(ALERT_WEBHOOK_URL, json={"content": f"🚨 **CRITICAL ALERT:** {message}"}, timeout=5)
+    except Exception as e:
+        logger.error(f"Failed to send webhook alert: {e}")
 
 # --- CONFIGURATION ---
 # Initialize Firebase Admin SDK
 try:
     firebase_admin.initialize_app()
 except ValueError:
-    # Already initialized
-    pass
+    pass  # Already initialized
 
-db = firestore.client()
-RECONCILE_INTERVAL = 15  # seconds
-HEARTBEAT_THRESHOLD = 120 # seconds
-AIWA_SCRIPT = os.path.join(os.path.dirname(__file__), "aiwa_multi.py") # Expecting .py now
-INSTA_SCRIPT = os.path.join(os.path.dirname(__file__), "insta_multi.py")
-REPOSTER_SCRIPT = os.path.join(os.path.dirname(__file__), "insta_reposter.py")
+@retry(
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    stop=stop_after_attempt(5)
+)
+def get_db_client() -> Client:
+    """Returns the Firestore client with exponential backoff on failure."""
+    return firestore.client()
 
-LISTENER_HOSTNAME = socket.gethostname()
+db: Client = get_db_client()
+RECONCILE_INTERVAL: int = 15  # seconds
+HEARTBEAT_THRESHOLD: int = 120 # seconds
+AIWA_SCRIPT: str = os.path.join(os.path.dirname(__file__), "aiwa_multi.py")
+INSTA_SCRIPT: str = os.path.join(os.path.dirname(__file__), "insta_multi.py")
+REPOSTER_SCRIPT: str = os.path.join(os.path.dirname(__file__), "insta_reposter.py")
+
+LISTENER_HOSTNAME: str = socket.gethostname()
+reposter_process: Optional[subprocess.Popen] = None
 
 # --- SHUTDOWN HANDLING ---
-shutdown_flag = False
-def handle_shutdown_signal(signum, frame):
+shutdown_flag: bool = False
+
+def handle_shutdown_signal(signum: int, frame: Any) -> None:
     global shutdown_flag
     if not shutdown_flag:
-        print("\n[Listener] Shutdown signal received. Finishing current cycle and terminating workers...")
+        logger.warning("Shutdown signal received. Finishing current cycle and terminating workers...")
         shutdown_flag = True
 
 # --- PROCESS MANAGEMENT ---
-def is_process_running(pid: int) -> bool:
-    if pid is None or pid <= 0: return False
+def is_process_running(pid: Optional[int]) -> bool:
+    if pid is None or pid <= 0: 
+        return False
     try:
         return psutil.pid_exists(pid)
     except Exception:
         return False
 
-def kill_orphaned_chrome_processes():
+def kill_orphaned_chrome_processes() -> None:
     """Aggressively finds and kills Chrome/Chromedriver processes not attached to a known worker."""
-    # In a simple deployment, we assume THIS listener owns all chrome processes.
-    # Be careful running this on a shared desktop machine.
     try:
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
-                if 'chrome' in proc.info['name'].lower() or 'chromedriver' in proc.info['name'].lower():
-                    # Check if this process is a child of any known worker? 
-                    # For robust headless servers, we might just kill them all if we are restarting.
+                name = proc.info.get('name', '').lower()
+                if 'chrome' in name or 'chromedriver' in name:
+                    # In a dedicated container/server, we could kill all chrome processes
                     pass
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error while cleaning orphaned processes: {e}")
 
-def start_worker_process(instance_id: str, script_path: str, is_reposter=False):
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
+def update_instance_status(table_name: str, instance_id: str, payload: Dict[str, Any]) -> None:
+    """Updates the Firestore document with retry logic."""
+    db.collection(table_name).document(instance_id).update(payload)
+
+def start_worker_process(instance_id: str, script_path: str, is_reposter: bool = False) -> None:
     """Starts a new worker process."""
     if not os.path.exists(script_path):
-        # Fallback to .txt if .py doesn't exist (dev mode)
         if os.path.exists(script_path + ".txt"):
             script_path = script_path + ".txt"
         else:
-            print(f"[Listener] ❌ Script not found: {script_path}")
+            logger.error(f"Script not found: {script_path}")
             return
 
     table_name = "instagram_reposter_jobs" if is_reposter else ("whatsapp_instances" if "aiwa" in script_path else "instagram_instances")
     
-    print(f"[Listener] 🚀 Launching {os.path.basename(script_path)} for ID {instance_id}...")
+    logger.info(f"Launching {os.path.basename(script_path)} for ID {instance_id}")
     try:
-        # We use Popen to not block the listener
-        subprocess.Popen([sys.executable, script_path, instance_id],
-                         stdout=sys.stdout,
-                         stderr=sys.stderr)
+        subprocess.Popen(
+            [sys.executable, script_path, instance_id],
+            stdout=sys.stdout,
+            stderr=sys.stderr
+        )
     except Exception as e:
-        print(f"[Listener] ❌ FAILED to launch worker: {e}")
-        try:
-            if not is_reposter:
-                db.collection(table_name).document(instance_id).update({
+        logger.error(f"FAILED to launch worker {instance_id}: {e}", exc_info=True)
+        if not is_reposter:
+            try:
+                update_instance_status(table_name, instance_id, {
                     "status": "failed", "last_error": f"Orchestrator launch error: {e}"
                 })
-        except:
-            pass
+            except Exception as update_err:
+                logger.error(f"Failed to update status for {instance_id}: {update_err}")
 
-def stop_worker_process(pid: int):
-    if not is_process_running(pid): return
+def stop_worker_process(pid: Optional[int]) -> None:
+    if pid is None or not is_process_running(pid): 
+        return
     try:
         proc = psutil.Process(pid)
-        print(f"[Listener] 🛑 Stopping Worker PID {pid}...")
+        logger.info(f"Stopping Worker PID {pid}...")
         proc.terminate()
         try:
             proc.wait(timeout=5)
         except psutil.TimeoutExpired:
-            print(f"[Listener] ⚠️ Worker PID {pid} stuck. Force killing...")
+            logger.warning(f"Worker PID {pid} stuck. Force killing...")
             proc.kill()
     except psutil.NoSuchProcess:
         pass
     except Exception as e:
-        print(f"[Listener] Error stopping PID {pid}: {e}")
+        logger.error(f"Error stopping PID {pid}: {e}")
 
 # --- MAIN ORCHESTRATION LOGIC ---
-def reconcile_workers():
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
+def fetch_workers(collection_name: str, query_filter: Dict[str, Any]) -> List[Any]:
+    """Fetches workers securely with exponential backoff."""
+    ref = db.collection(collection_name)
+    query = ref
+    for key, val in query_filter.items():
+        if isinstance(val, dict) and "in" in val:
+            query = query.where(key, "in", val["in"])
+        else:
+            query = query.where(key, "==", val)
+    return list(query.get())
+
+def reconcile_workers() -> None:
     """The core loop that syncs DB state with running processes."""
     
     # --- 1. CLEANUP ZOMBIES (Health Check) ---
     try:
-        # WhatsApp
-        wa_ref = db.collection("whatsapp_instances")
-        wa_workers = wa_ref.where("worker_hostname", "==", LISTENER_HOSTNAME).where("status", "in", ["running", "linking"]).get()
-        for doc in wa_workers:
-            w = doc.to_dict()
-            w['id'] = doc.id
-            if not is_process_running(w.get('worker_pid')):
-                print(f"[Listener] 💀 Worker {w.get('worker_pid')} (WA) is dead. Cleaning up DB.")
-                wa_ref.document(w['id']).update({"status": "failed", "worker_pid": None, "last_error": "Process vanished unexpectedly."})
-            elif w.get('last_heartbeat'):
-                last_hb = datetime.fromisoformat(w['last_heartbeat'].replace('Z', '+00:00'))
-                if (datetime.now(timezone.utc) - last_hb).total_seconds() > HEARTBEAT_THRESHOLD:
-                    print(f"[Listener] 💓 Worker {w.get('worker_pid')} (WA) heartbeat timeout. Killing.")
-                    stop_worker_process(w.get('worker_pid'))
-                    wa_ref.document(w['id']).update({"status": "failed", "worker_pid": None, "last_error": "Heartbeat timeout."})
-
-        # Instagram
-        ig_ref = db.collection("instagram_instances")
-        ig_workers = ig_ref.where("worker_hostname", "==", LISTENER_HOSTNAME).where("status", "in", ["running", "linking"]).get()
-        for doc in ig_workers:
-            w = doc.to_dict()
-            w['id'] = doc.id
-            if not is_process_running(w.get('worker_pid')):
-                print(f"[Listener] 💀 Worker {w.get('worker_pid')} (IG) is dead. Cleaning up DB.")
-                ig_ref.document(w['id']).update({"status": "failed", "worker_pid": None, "last_error": "Process vanished unexpectedly."})
-            elif w.get('last_heartbeat'):
-                last_hb = datetime.fromisoformat(w['last_heartbeat'].replace('Z', '+00:00'))
-                if (datetime.now(timezone.utc) - last_hb).total_seconds() > HEARTBEAT_THRESHOLD:
-                    print(f"[Listener] 💓 Worker {w.get('worker_pid')} (IG) heartbeat timeout. Killing.")
-                    stop_worker_process(w.get('worker_pid'))
-                    ig_ref.document(w['id']).update({"status": "failed", "worker_pid": None, "last_error": "Heartbeat timeout."})
-
+        platforms = [("whatsapp_instances", "WA"), ("instagram_instances", "IG")]
+        for collection, tag in platforms:
+            workers = fetch_workers(collection, {"worker_hostname": LISTENER_HOSTNAME, "status": {"in": ["running", "linking"]}})
+            for doc in workers:
+                w = doc.to_dict()
+                w_id = doc.id
+                pid = w.get('worker_pid')
+                
+                if not is_process_running(pid):
+                    logger.warning(f"Worker {pid} ({tag}) is dead. Cleaning up DB.")
+                    send_alert(f"Worker {pid} for instance {w_id} ({tag}) died unexpectedly. Cleaning up.")
+                    update_instance_status(collection, w_id, {"status": "failed", "worker_pid": None, "last_error": "Process vanished unexpectedly."})
+                elif w.get('last_heartbeat'):
+                    last_hb_str = w['last_heartbeat'].replace('Z', '+00:00')
+                    last_hb = datetime.fromisoformat(last_hb_str)
+                    if (datetime.now(timezone.utc) - last_hb).total_seconds() > HEARTBEAT_THRESHOLD:
+                        logger.warning(f"Worker {pid} ({tag}) heartbeat timeout. Killing.")
+                        send_alert(f"Worker {pid} for instance {w_id} ({tag}) timed out. Force killing.")
+                        stop_worker_process(pid)
+                        update_instance_status(collection, w_id, {"status": "failed", "worker_pid": None, "last_error": "Heartbeat timeout."})
     except Exception as e:
-        print(f"[Listener] ⚠️ Health check error: {e}")
+        logger.error(f"Health check error: {e}", exc_info=True)
 
     # --- 2. LAUNCH PENDING INSTANCES ---
     if shutdown_flag: return
 
     try:
-        # WhatsApp
-        wa_pending = wa_ref.where("isActive", "==", True).get()
-        for doc in wa_pending:
-            instance = doc.to_dict()
-            instance['id'] = doc.id
-            if not instance.get('worker_pid'):
-                start_worker_process(instance['id'], AIWA_SCRIPT)
-            elif instance.get('worker_hostname') == LISTENER_HOSTNAME and not is_process_running(instance['worker_pid']):
-                 start_worker_process(instance['id'], AIWA_SCRIPT)
-
-        # Instagram
-        ig_pending = ig_ref.where("isActive", "==", True).get()
-        for doc in ig_pending:
-            instance = doc.to_dict()
-            instance['id'] = doc.id
-            if not instance.get('worker_pid'):
-                start_worker_process(instance['id'], INSTA_SCRIPT)
-            elif instance.get('worker_hostname') == LISTENER_HOSTNAME and not is_process_running(instance['worker_pid']):
-                 start_worker_process(instance['id'], INSTA_SCRIPT)
-
+        pending_configs = [("whatsapp_instances", AIWA_SCRIPT), ("instagram_instances", INSTA_SCRIPT)]
+        for collection, script in pending_configs:
+            pending = fetch_workers(collection, {"isActive": True})
+            for doc in pending:
+                instance = doc.to_dict()
+                instance_id = doc.id
+                pid = instance.get('worker_pid')
+                
+                if not pid or (instance.get('worker_hostname') == LISTENER_HOSTNAME and not is_process_running(pid)):
+                    start_worker_process(instance_id, script)
     except Exception as e:
-        print(f"[Listener] ⚠️ Reconciliation error: {e}")
+        logger.error(f"Reconciliation error: {e}", exc_info=True)
 
-    # --- 3. REPOSTER JOBS (One Process Per Job for isolation) ---
-    # In a real SaaS, you'd use a queue (Celery/BullMQ). For this script-based backend:
-    # We will launch a ephemeral reposter script if the job is active and due.
+    # --- 3. REPOSTER JOBS (Daemon Management) ---
     try:
-        # reposter_jobs = db.collection("instagram_reposter_jobs").where("status", "==", "active").get()
-        # The reposter script itself handles the "is it due?" logic, 
-        # BUT launching a new process every 15s is bad. 
-        # BETTER ARCHITECTURE: Launch ONE permanent 'reposter_worker' that loops through all jobs.
-        # Let's check if our Reposter Engine is running.
-        
-        # We'll use a simple lock file or check process name to see if the main reposter engine is up.
-        # For simplicity in this specific "file-based" setup, we will launch it ONCE if not running.
-        # However, since psutil matching by script name is tricky with python arguments, 
-        # we will assume the user runs `listener.py` which launches `insta_reposter.py` as a subprocess 
-        # and keeps a reference.
-        
-        # ACTUALLY: The best way here is to launch `insta_reposter.py` as a daemon managed by this listener.
-        # We will store its PID in memory here (not DB).
         global reposter_process
         if reposter_process is None or not is_process_running(reposter_process.pid):
-            print("[Listener] 🔄 Starting Reposter Engine Daemon...")
+            logger.info("Starting Reposter Engine Daemon...")
             reposter_process = subprocess.Popen([sys.executable, REPOSTER_SCRIPT], stdout=sys.stdout, stderr=sys.stderr)
-            print(f"[Listener] Reposter Engine running with PID {reposter_process.pid}")
-
+            logger.info(f"Reposter Engine running with PID {reposter_process.pid}")
     except Exception as e:
-        print(f"[Listener] ⚠️ Reposter check error: {e}")
-
-
-reposter_process = None
+        logger.error(f"Reposter check error: {e}", exc_info=True)
 
 # --- MAIN EXECUTION ---
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, handle_shutdown_signal)
     signal.signal(signal.SIGTERM, handle_shutdown_signal)
     
-    print("[Listener] Orchestrator started. Robust Mode: ON.")
-    
-    # Initial cleanup
+    # IMPROVEMENT 4: Enable Termux Wake Lock to prevent Android from sleeping the CPU
+    try:
+        if os.path.exists("/data/data/com.termux/files/usr/bin/termux-wake-lock"):
+            os.system("termux-wake-lock")
+            logger.info("Termux Wake Lock acquired to maintain background execution.")
+    except Exception as e:
+        logger.warning(f"Failed to acquire Termux Wake Lock: {e}")
+
+    logger.info("Orchestrator started. Robust Mode: ENTERPRISE.")
     kill_orphaned_chrome_processes()
 
     while not shutdown_flag:
         try:
             reconcile_workers()
         except Exception as e:
-            print(f"[Listener] 💥 CRITICAL LOOP ERROR: {e}")
-            # Don't crash, just wait and retry
+            logger.critical(f"CRITICAL LOOP ERROR: {e}", exc_info=True)
         
-        # Sleep in small chunks to be responsive to shutdown
         for _ in range(RECONCILE_INTERVAL):
             if shutdown_flag: break
             time.sleep(1)
 
-    print("[Listener] Shutdown initiated...")
+    logger.info("Shutdown initiated...")
     
-    # Kill reposter
     if reposter_process:
         stop_worker_process(reposter_process.pid)
 
-    # Kill managed workers
     try:
-        # Cleanup WhatsApp
-        wa_data = db.collection("whatsapp_instances").where("worker_hostname", "==", LISTENER_HOSTNAME).get()
-        for doc in wa_data:
-            w = doc.to_dict()
-            if w.get('worker_pid'): stop_worker_process(w['worker_pid'])
-        
-        # Cleanup Insta
-        ig_data = db.collection("instagram_instances").where("worker_hostname", "==", LISTENER_HOSTNAME).get()
-        for doc in ig_data:
-            w = doc.to_dict()
-            if w.get('worker_pid'): stop_worker_process(w['worker_pid'])
-    except:
-        pass
+        for collection in ["whatsapp_instances", "instagram_instances"]:
+            docs = fetch_workers(collection, {"worker_hostname": LISTENER_HOSTNAME})
+            for doc in docs:
+                w = doc.to_dict()
+                if w.get('worker_pid'): 
+                    stop_worker_process(w['worker_pid'])
+    except Exception as e:
+        logger.error(f"Error during shutdown worker cleanup: {e}")
             
-    print("[Listener] Goodbye.")
+    logger.info("Goodbye.")

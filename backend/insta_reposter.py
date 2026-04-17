@@ -14,6 +14,7 @@ import base64
 import traceback
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
+from tenacity import retry, wait_exponential, stop_after_attempt
 
 # Firebase & Generative AI
 import firebase_admin
@@ -103,6 +104,7 @@ def extract_frames(video_path, num_frames=6):
         print(f"[{WORKER_ID}] Frame extraction warning: {e}")
     return frames
 
+@retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
 def generate_viral_caption(video_path, niche, tone, cta):
     """
     Generates a dynamic caption using gemma-3-27b-it.
@@ -172,9 +174,24 @@ def generate_viral_caption(video_path, niche, tone, cta):
 def get_driver():
     try:
         chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_argument('--headless=new')
+        
+        # IMPROVEMENT 2: Anti-Ban IP Proxy Configuration
+        proxy_server = os.getenv("PROXY_SERVER", "")
+        if proxy_server:
+            chrome_options.add_argument(f'--proxy-server={proxy_server}')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument("--metrics-recording-only")
+        chrome_options.add_argument("--mute-audio")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--no-default-browser-check")
+        chrome_options.add_argument("--disable-application-cache")
+        # Block images and heavy media
+        chrome_options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
+        chrome_options.page_load_strategy = "eager"
         # Persistent session
         chrome_options.add_argument(f"--user-data-dir={os.path.join(os.getcwd(), 'selenium_reposter_session')}")
         
@@ -415,6 +432,16 @@ def main_loop():
     print(f"[{WORKER_ID}] Starting SaaS Reposter Engine Loop...")
     while True:
         try:
+            # 1. Update heartbeat for reposter
+            try:
+                db.collection("instagram_reposter_logs").document("runner_status").set({
+                    "last_heartbeat": firestore.SERVER_TIMESTAMP,
+                    "worker_id": WORKER_ID,
+                    "status": "running"
+                })
+            except Exception as hb_err:
+                pass
+                
             jobs_ref = db.collection("instagram_reposter_jobs")
             query = jobs_ref.where("status", "==", "active")
             docs = query.get()
