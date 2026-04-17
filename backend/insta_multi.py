@@ -197,6 +197,25 @@ def save_message_to_db(contact_username: str, sender: str, text: str):
 
 
 # --- SELENIUM & HELPER FUNCTIONS ---
+def find_chrome_binary():
+    """Locate the Chrome or Chromium binary on the system."""
+    import shutil
+    possibilities = [
+        'google-chrome',
+        'google-chrome-stable',
+        'chromium',
+        'chromium-browser',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/data/data/com.termux/files/usr/bin/chromium'
+    ]
+    for p in possibilities:
+        path = shutil.which(p) if not p.startswith('/') else (p if os.path.exists(p) else None)
+        if path:
+            return path
+    return None
+
 def find_or_download_chromedriver(worker_id):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     local_chromedriver_dir = os.path.join(script_dir, "chromedriver-linux64")
@@ -260,6 +279,15 @@ def run_instagram_automation():
         service = Service(executable_path=chromedriver_path)
 
         chrome_options = webdriver.ChromeOptions()
+        
+        # --- NEW: Locate Chrome Binary ---
+        chrome_binary = find_chrome_binary()
+        if chrome_binary:
+            log_to_db("INFO", f"Setting Chrome binary location to: {chrome_binary}")
+            chrome_options.binary_location = chrome_binary
+        else:
+            log_to_db("WARN", "Could not locate Chrome binary automatically. Selenium will attempt to find it.")
+
         chrome_options.add_argument('--headless=new')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-setuid-sandbox')

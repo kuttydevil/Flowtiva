@@ -313,7 +313,10 @@
         "inactive": "Standby mode. Signal processing paused.",
         "failed": "System Fault. Check diagnostics.",
         "healthy": "Optimal",
-        "unresponsive": "Latency High"
+        "unresponsive": "Latency High",
+        "diagnosticInfo": "Diagnostic Information",
+        "diagnosticsTitle": "Diagnostics",
+        "chromeError": "Chrome Instance Error"
       },
       "buttons": {
         "viewChats": "Console",

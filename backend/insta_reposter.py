@@ -178,6 +178,66 @@ def generate_viral_caption(video_path, niche, tone, cta):
              
     return f"Check this out! {niche} \n\n{cta} #viral #trending"
 
+import shutil
+
+def find_chrome_binary():
+    """Locate the Chrome or Chromium binary on the system."""
+    possibilities = [
+        'google-chrome',
+        'google-chrome-stable',
+        'chromium',
+        'chromium-browser',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/data/data/com.termux/files/usr/bin/chromium'
+    ]
+    for p in possibilities:
+        path = shutil.which(p) if not p.startswith('/') else (p if os.path.exists(p) else None)
+        if path:
+            return path
+    return None
+
+def find_or_download_chromedriver():
+    """Locate or download ChromeDriver."""
+    import requests
+    import zipfile
+    import stat
+    from webdriver_manager.chrome import ChromeDriverManager
+
+    script_dir = os.getcwd()
+    local_chromedriver_dir = os.path.join(script_dir, "chromedriver-linux64")
+    local_chromedriver_path = os.path.join(local_chromedriver_dir, "chromedriver")
+    
+    possible_paths = [
+        "/usr/bin/chromedriver",
+        "/data/data/com.termux/files/usr/bin/chromedriver",
+        local_chromedriver_path
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+
+    try:
+        return ChromeDriverManager().install()
+    except:
+        pass
+
+    # Manual Fallback
+    VERSION = "127.0.6533.72"
+    URL = f"https://storage.googleapis.com/chrome-for-testing-public/{VERSION}/linux64/chromedriver-linux64.zip"
+    zip_path = os.path.join(script_dir, "chromedriver.zip")
+    try:
+        resp = requests.get(URL)
+        resp.raise_for_status()
+        with open(zip_path, "wb") as f: f.write(resp.content)
+        with zipfile.ZipFile(zip_path, 'r') as z: z.extractall(script_dir)
+        os.remove(zip_path)
+        os.chmod(local_chromedriver_path, os.stat(local_chromedriver_path).st_mode | stat.S_IEXEC)
+        return local_chromedriver_path
+    except:
+        return None
+
 # --- SELENIUM HELPERS ---
 def get_driver():
     session_path = os.path.join(os.getcwd(), 'selenium_reposter_session')
@@ -186,6 +246,15 @@ def get_driver():
     
     try:
         chrome_options = webdriver.ChromeOptions()
+        
+        # --- NEW: Locate Chrome Binary ---
+        chrome_binary = find_chrome_binary()
+        if chrome_binary:
+            print(f"[{WORKER_ID}] Setting Chrome binary location to: {chrome_binary}")
+            chrome_options.binary_location = chrome_binary
+        else:
+            print(f"[{WORKER_ID}] WARNING: Could not locate Chrome binary automatically.")
+
         chrome_options.add_argument('--headless=new')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-setuid-sandbox')
@@ -216,10 +285,14 @@ def get_driver():
         chrome_options.add_argument(f"--user-data-dir={session_path}")
         
         driver = None
+        chromedriver_path = find_or_download_chromedriver()
+        if not chromedriver_path:
+            raise Exception("Could not find or download ChromeDriver.")
+
         for attempt in range(1, 4):
             try:
                 print(f"[{WORKER_ID}] Initializing WebDriver (Attempt {attempt})...")
-                service = Service(ChromeDriverManager().install(), service_args=["--verbose", f"--log-path={log_path}"])
+                service = Service(executable_path=chromedriver_path, service_args=["--verbose", f"--log-path={log_path}"])
                 driver = webdriver.Chrome(service=service, options=chrome_options)
                 break
             except Exception as e:

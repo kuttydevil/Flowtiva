@@ -97,6 +97,18 @@ export const InstanceCard: React.FC<InstanceCardProps> = ({ instance, onToggle, 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // NEW: Log instance errors to developer console for easier debugging
+    useEffect(() => {
+        if (instance.status === WhatsAppInstanceStatus.Failed && instance.last_error) {
+            console.error(
+                `%c[Nexus Instance Error] %c${instance.phoneNumber}`, 
+                "color: #ef4444; font-weight: bold; font-size: 11px;",
+                "color: #71717a; font-family: monospace; font-size: 11px;",
+                "\n\n" + instance.last_error
+            );
+        }
+    }, [instance.status, instance.last_error, instance.phoneNumber]);
+
     const getPrimaryAction = () => {
         let buttonText = "";
         if (instance.status === WhatsAppInstanceStatus.Running || instance.status === WhatsAppInstanceStatus.Inactive) {
@@ -156,8 +168,45 @@ export const InstanceCard: React.FC<InstanceCardProps> = ({ instance, onToggle, 
                 </div>
                 
                 {instance.status === 'failed' && instance.last_error && (
-                     <div className="p-4 bg-destructive/10 rounded-[16px] border border-destructive/20 text-xs text-destructive font-medium shadow-sm">
-                        <strong>{t('common.error')}:</strong> {instance.last_error}
+                     <div className="space-y-3">
+                        <div className="p-5 bg-destructive/[0.03] rounded-[24px] border border-destructive/10 shadow-sm transition-all hover:bg-destructive/[0.05] group/diag">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2.5 text-destructive">
+                                    <div className="p-2 bg-destructive/10 rounded-xl group-hover/diag:scale-110 transition-transform">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+                                    </div>
+                                    <span className="font-bold text-[13px] tracking-tight uppercase opacity-90">{t('hub.instanceCard.tooltips.chromeError')}</span>
+                                </div>
+                                <div className="px-2 py-0.5 rounded-full bg-destructive/10 text-[9px] font-black uppercase tracking-tighter text-destructive">CRITICAL_FAULT</div>
+                            </div>
+                            
+                            <div className="relative group/error">
+                                <div className="font-mono text-[11px] leading-[1.6] break-words bg-[#0c0c0e] text-zinc-300 p-4 rounded-[18px] border border-white/5 shadow-inner overflow-hidden max-h-56 overflow-y-auto custom-scrollbar-minimal">
+                                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/5 opacity-50">
+                                        <div className="w-2 h-2 rounded-full bg-red-500/50" />
+                                        <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
+                                        <div className="w-2 h-2 rounded-full bg-green-500/50" />
+                                        <span className="text-[9px] ml-1 font-bold tracking-widest uppercase">system_log_viewer</span>
+                                    </div>
+                                    <span className="text-destructive font-bold select-none mr-2">nexus@instance:~$</span>
+                                    <span className="whitespace-pre-wrap">{instance.last_error}</span>
+                                </div>
+                                <div className="mt-3 flex items-center justify-between px-1">
+                                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold opacity-60 flex items-center gap-1.5">
+                                        <span className="w-1 h-1 rounded-full bg-destructive animate-pulse" />
+                                        {t('hub.instanceCard.tooltips.diagnosticInfo')}
+                                    </span>
+                                    <button 
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(instance.last_error || '');
+                                        }}
+                                        className="text-[10px] font-bold text-destructive hover:text-destructive/80 transition-colors bg-destructive/5 px-3 py-1 rounded-lg border border-destructive/10 active:scale-95"
+                                    >
+                                        Copy Trace
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 

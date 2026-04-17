@@ -222,7 +222,10 @@
         "inactive": "وضع الاستعداد. معالجة الإشارات متوقفة مؤقتًا.",
         "failed": "خطأ في النظام. تحقق من التشخيصات.",
         "healthy": "مثالي",
-        "unresponsive": "زمن انتقال مرتفع"
+        "unresponsive": "زمن انتقال مرتفع",
+        "diagnosticInfo": "معلومات التشخيص",
+        "diagnosticsTitle": "التشخيصات",
+        "chromeError": "خطأ في مثيل كروم"
       },
       "buttons": {
         "viewChats": "وحدة التحكم",
