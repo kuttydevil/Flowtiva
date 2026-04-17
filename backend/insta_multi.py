@@ -20,6 +20,7 @@ import requests
 import zipfile
 import stat
 from dotenv import load_dotenv
+from webdriver_manager.chrome import ChromeDriverManager
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -198,7 +199,9 @@ def save_message_to_db(contact_username: str, sender: str, text: str):
 # --- SELENIUM & HELPER FUNCTIONS ---
 def find_or_download_chromedriver(worker_id):
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    local_chromedriver_path = os.path.join(script_dir, "chromedriver-linux64", "chromedriver")
+    local_chromedriver_dir = os.path.join(script_dir, "chromedriver-linux64")
+    local_chromedriver_path = os.path.join(local_chromedriver_dir, "chromedriver")
+    
     possible_paths = [
         "/usr/bin/chromedriver",
         "/data/data/com.termux/files/usr/bin/chromedriver",
@@ -209,7 +212,16 @@ def find_or_download_chromedriver(worker_id):
         if os.path.exists(path):
             log_to_db("INFO", f"Found existing ChromeDriver at: {path}")
             return path
-    log_to_db("WARN", f"ChromeDriver not found. Attempting to download...")
+
+    log_to_db("WARN", "ChromeDriver not found in common paths. Using ChromeDriverManager for auto-install...")
+    try:
+        path = ChromeDriverManager().install()
+        log_to_db("INFO", f"ChromeDriverManager installed ChromeDriver at: {path}")
+        return path
+    except Exception as e:
+        log_to_db("ERROR", f"ChromeDriverManager failed: {e}. Falling back to manual download...")
+
+    # Manual Download Fallback
     CHROMEDRIVER_VERSION = "127.0.6533.72"
     CHROMEDRIVER_URL = f"https://storage.googleapis.com/chrome-for-testing-public/{CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"
     zip_path = os.path.join(script_dir, "chromedriver-linux64.zip")
@@ -249,21 +261,28 @@ def run_instagram_automation():
 
         chrome_options = webdriver.ChromeOptions()
         chrome_options.add_argument('--headless=new')
-        
-        # IMPROVEMENT 2: Anti-Ban IP Proxy Configuration
-        proxy_server = os.getenv("PROXY_SERVER", "")
-        if proxy_server:
-            chrome_options.add_argument(f'--proxy-server={proxy_server}')
-            log_to_db("INFO", "Masking traffic through proxy...")
         chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-setuid-sandbox')
+        chrome_options.add_argument('--disable-seccomp-filter-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument('--no-zygote')
+        chrome_options.add_argument('--disable-software-rasterizer')
+        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+        chrome_options.add_argument('--password-store=basic')
+        chrome_options.add_argument('--ignore-certificate-errors')
         chrome_options.add_argument("--metrics-recording-only")
         chrome_options.add_argument("--mute-audio")
         chrome_options.add_argument("--no-first-run")
         chrome_options.add_argument("--no-default-browser-check")
         chrome_options.add_argument("--disable-application-cache")
+        
+        # IMPROVEMENT 2: Anti-Ban IP Proxy Configuration
+        proxy_server = os.getenv("PROXY_SERVER", "")
+        if proxy_server:
+            chrome_options.add_argument(f'--proxy-server={proxy_server}')
+            log_to_db("INFO", f"Applying proxy: {proxy_server}")
+
         # Block images and heavy media to conserve RAM on termux
         chrome_options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
         chrome_options.page_load_strategy = "eager"
@@ -273,8 +292,51 @@ def run_instagram_automation():
         os.makedirs(session_path, exist_ok=True)
         chrome_options.add_argument(f"--user-data-dir={session_path}")
         
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        log_to_db("INFO", f"WebDriver initialized with driver at {chromedriver_path}. Session path: {session_path}")
+        # --- INITIALIZATION WITH RETRY & VERBOSE LOGGING ---
+        log_path = os.path.join(session_path, "chromedriver.log")
+        initialized = False
+        
+        for attempt in range(1, 4):
+            try:
+                log_to_db("INFO", f"Attempting WebDriver initialization (Attempt {attempt})...")
+                service = Service(executable_path=chromedriver_path, service_args=["--verbose", f"--log-path={log_path}"])
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+                initialized = True
+                break
+            except Exception as e:
+                error_msg = f"WebDriver initialization attempt {attempt} failed: {e}"
+                log_to_db("ERROR", error_msg)
+                
+                # Examine crash logs if available
+                if os.path.exists(log_path):
+                    try:
+                        with open(log_path, "r") as f:
+                            lines = f.readlines()
+                            log_to_db("DEBUG", f"--- CHROMEDRIVER CRASH LOG (Tail) ---")
+                            for line in lines[-10:]:
+                                log_to_db("DEBUG", f"    {line.strip()}")
+                    except: pass
+                
+                if attempt < 3:
+                    time.sleep(5)
+                else:
+                    raise e
+
+        # --- ANTI-DETECTION: Execute JS to hide properties before page load ---
+        stealth_script = """
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            window.chrome = { runtime: {} };
+            const originalQuery = window.navigator.permissions.query;
+            window.navigator.permissions.query = (parameters) => (
+                parameters.name === 'notifications' ?
+                    Promise.resolve({ state: Notification.permission }) :
+                    originalQuery(parameters)
+            );
+        """
+        driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {'source': stealth_script})
+        log_to_db("INFO", f"WebDriver initialized successfully. Session path: {session_path}")
 
         # --- LOGIN ---
         driver.get("https://www.instagram.com/")

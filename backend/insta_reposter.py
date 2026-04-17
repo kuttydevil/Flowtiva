@@ -180,31 +180,72 @@ def generate_viral_caption(video_path, niche, tone, cta):
 
 # --- SELENIUM HELPERS ---
 def get_driver():
+    session_path = os.path.join(os.getcwd(), 'selenium_reposter_session')
+    os.makedirs(session_path, exist_ok=True)
+    log_path = os.path.join(session_path, "chromedriver.log")
+    
     try:
         chrome_options = webdriver.ChromeOptions()
         chrome_options.add_argument('--headless=new')
-        
-        # IMPROVEMENT 2: Anti-Ban IP Proxy Configuration
-        proxy_server = os.getenv("PROXY_SERVER", "")
-        if proxy_server:
-            chrome_options.add_argument(f'--proxy-server={proxy_server}')
         chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-setuid-sandbox')
+        chrome_options.add_argument('--disable-seccomp-filter-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument('--no-zygote')
+        chrome_options.add_argument('--disable-software-rasterizer')
+        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+        chrome_options.add_argument('--password-store=basic')
+        chrome_options.add_argument('--ignore-certificate-errors')
         chrome_options.add_argument("--metrics-recording-only")
         chrome_options.add_argument("--mute-audio")
         chrome_options.add_argument("--no-first-run")
         chrome_options.add_argument("--no-default-browser-check")
         chrome_options.add_argument("--disable-application-cache")
+        
+        # Proxy Configuration
+        proxy_server = os.getenv("PROXY_SERVER", "")
+        if proxy_server:
+            chrome_options.add_argument(f'--proxy-server={proxy_server}')
+            print(f"[{WORKER_ID}] Applying proxy: {proxy_server}")
+            
         # Block images and heavy media
         chrome_options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
         chrome_options.page_load_strategy = "eager"
         # Persistent session
-        chrome_options.add_argument(f"--user-data-dir={os.path.join(os.getcwd(), 'selenium_reposter_session')}")
+        chrome_options.add_argument(f"--user-data-dir={session_path}")
         
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver = None
+        for attempt in range(1, 4):
+            try:
+                print(f"[{WORKER_ID}] Initializing WebDriver (Attempt {attempt})...")
+                service = Service(ChromeDriverManager().install(), service_args=["--verbose", f"--log-path={log_path}"])
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+                break
+            except Exception as e:
+                print(f"[{WORKER_ID}] Initialization attempt {attempt} failed: {e}")
+                if os.path.exists(log_path):
+                    try:
+                        with open(log_path, "r") as f:
+                            lines = f.readlines()
+                            print(f"[{WORKER_ID}] --- CHROMEDRIVER CRASH LOG (Tail) ---")
+                            for line in lines[-10:]:
+                                print(f"    {line.strip()}")
+                    except: pass
+                if attempt < 3:
+                    time.sleep(5)
+                else:
+                    raise e
+
+        # --- ANTI-DETECTION JS INJECTION ---
+        stealth_script = """
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            window.chrome = { runtime: {} };
+        """
+        driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {'source': stealth_script})
+        
         return driver
     except Exception as e:
         print(f"Driver Error: {e}")
